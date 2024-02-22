@@ -1,0 +1,7 @@
+Graphics cards (GPUs) are powerful tools in classical simulations of amplifiers, couplers, etc.
+
+GPUs allow parallel sweeps in parameter space -> speedups up to 2 orders of magnitude
+
+Not just convenient, but a matter of necessity for certain useful computations, like noise studies that require many identical simulation shots
+
+This Github repo has tools that can translate familiar equations of motion into GPU-readable code, along with useful analysis code.
