@@ -2,38 +2,44 @@ import numpy as np
 import sympy as sp
 import cupy as cp
 import time
-from numba.typed import List
+import matplotlib.pyplot as plt
+import matplotlib
+
+
+matplotlib.use('Qt5Agg')
 
 # Make sure you use a GPU runtime, otherwise cupy won't import
 
-def RK_loop(t, x, x_avg, x_var, f_dxdt, dt, kernel_op, idxs):
+def RK_loop_saveall(t, x0, f_dxdt, dt, kernel_op, idxs):
     '''
     Implements an RK4 method.
 
     The indexing for the variable 'x', which contains all the solution data,
-    goes like: time steps, modes, variations.
+    goes like: modes, variations, time steps
 
-    So for example, 3 modes with 5 variations running for hundred time steps
-    would have the shape (100, 3, 5).
+    So for example, 3 modes with 5 variations running for a hundred time steps
+    would have the shape (3, 5, 100).
     '''
 
-    N, M = np.shape(cp.asnumpy(x))
+    N, M = np.shape(cp.asnumpy(x0))
     
-    noise_mask = cp.zeros([N,M])
-    noise_mask[0,:] = 1
+    noise_mask = cp.zeros([N, M])
+    noise_mask[0, :] = 1
+
+    x = cp.zeros([N, M, len(t)])
+
+    x[:,:,0] = x0
 
     for i in range(0, len(t)-1):
-        
-        x_avg[:,i] = cp.mean(x, axis=1)
 
-        k1 = f_dxdt(x, t[i], dt, kernel_op, idxs)
-        k2 = f_dxdt(x + k1*dt/2, t[i] + dt/2, dt, kernel_op, idxs)
-        k3 = f_dxdt(x + k2*dt/2, t[i] + dt/2, dt, kernel_op, idxs)
-        k4 = f_dxdt(x + k3*dt, t[i] + dt, dt, kernel_op, idxs)
+        k1 = f_dxdt(x[:, :, i], t[i], dt, kernel_op, idxs)
+        k2 = f_dxdt(x[:, :, i] + k1*dt/2, t[i] + dt/2, dt, kernel_op, idxs)
+        k3 = f_dxdt(x[:, :, i] + k2*dt/2, t[i] + dt/2, dt, kernel_op, idxs)
+        k4 = f_dxdt(x[:, :, i] + k3*dt, t[i] + dt, dt, kernel_op, idxs)
 
-        x += (dt/6)*(k1 + 2*k2 + 2*k3 + k4) + noise_mask*cp.random.normal(0, 1e-3, size=(N,M))
+        x[:, :, i+1] = x[:, :, i] + (dt/6)*(k1 + 2*k2 + 2*k3 + k4) + noise_mask*cp.random.normal(0, 1e-4, size=(N, M))
 
-    return x, x_avg
+    return x
 
 def f_dxdt(xi, t, dt, kernel_op, idxs):
     '''
@@ -64,9 +70,6 @@ def related_rates_problem(t, N, variations1, variations2, kernel_op):
 
     t = cp.array(t, dtype=cp.float64)
 
-    x_avg = cp.zeros([N, len(t)])
-    x_var = cp.zeros([N, len(t)])
-
     idxs = []
 
     idx1 = np.arange(0, variations1)
@@ -77,9 +80,25 @@ def related_rates_problem(t, N, variations1, variations2, kernel_op):
     idxs.append(cp.array(cp.array(IDX1.flatten(), dtype=np.int8)))
     idxs.append(cp.array(cp.array(IDX2.flatten(), dtype=np.int8)))
 
-    x, x_avg = RK_loop(t, x0, x_avg, x_var, f_dxdt, dt, kernel_op, idxs)
+    decimation_factor = 100
 
-    return x, x_avg
+    xi = cp.zeros([N, variations1 * variations2, len(t) // decimation_factor])
+    xq = cp.zeros([N, variations1 * variations2, len(t) // decimation_factor])
+
+    w_demod = 9 * 2 * np.pi
+
+    for i in range(0, len(t)//decimation_factor):
+
+        t_demod = cp.tile(t[i*decimation_factor:(i+1)*decimation_factor], (N, variations1 * variations2, 1))
+
+        x = RK_loop_saveall(t[i*decimation_factor:(i+1)*decimation_factor], x0, f_dxdt, dt, kernel_op, idxs)
+
+        xi[:, :, i] = cp.mean(np.cos(-t_demod*w_demod)*x, axis=2)
+        xq[:, :, i] = cp.mean(np.sin(-t_demod*w_demod)*x, axis=2)
+
+        x0 = x[:, :, -1]
+
+    return xi, xq
 
 
 def convert_power_arg_to_float64(inputt):
@@ -98,7 +117,7 @@ def convert_power_arg_to_float64(inputt):
             j = i+3
             while(stringy[j] != ')'):
                 j += 1
-            stringy[j-1]=stringy[j-1]+'.0'
+            stringy[j-1] = stringy[j-1]+'.0'
 
     string = ''
 
@@ -111,12 +130,12 @@ def convert_power_arg_to_float64(inputt):
 def run_sim(pump_on, signal_on):
 
     variations1 = 1
-    variations2 = 10000
+    variations2 = 1000
     
     params = [('omega_0', 10*2*np.pi),
-              ('omega_p', 19.9*2*np.pi),
-              ('omega_s', 9.95*2*np.pi),
-              ('A_p', 7),
+              ('omega_p', 20*2*np.pi),
+              ('omega_s', 10*2*np.pi),
+              ('A_p', 9),
               ('A_s', 0.1),
               ('kappa', 1*2*np.pi),  # mode kappa
               ('kappa_r', 0.5*2*np.pi), # readout kappa
@@ -128,7 +147,7 @@ def run_sim(pump_on, signal_on):
     exp_strs = ['p_1 + signal_on*A_s*cos(omega_s*t) + pump_on*A_p*cos(omega_p*t + phi)',
                 '-(q_1+q_1**2)*omega_0**2 - kappa*p_1',
                 'p_r',
-                '-omega_s**2 * q_r + q_1 - kappa_r*p_r'] # define the time derivatives of each coordinate
+                '-omega_s**2 * q_r + q_1 - kappa_r*p_r']  # define the time derivatives of each coordinate
     
     exp_sps = []
     exp_cs = []
@@ -161,7 +180,6 @@ def run_sim(pump_on, signal_on):
     for i in range(0,len(params)):
     
       try:
-    
         param0 = params[i][1][0]
         param_vars = params[i][1][2]
         param_range = params[i][1][1]-params[i][1][0]
@@ -188,52 +206,31 @@ def run_sim(pump_on, signal_on):
     # for i in range(0,len(var_strs)):
     #   display(sp.Eq(sp.sympify(var_strs[i]),exp_sps[i]))
     
-    t = np.linspace(0, 10, 10001)
+    t = np.arange(0, 10, 0.001)
     
     N = len(var_strs)
     
     time1 = time.time()
-    x, x_avg = related_rates_problem(t, N, variations1, variations2, ODE)
+    xi, xq = related_rates_problem(t, N, variations1, variations2, ODE)
     print(time.time() - time1)
 
-    xnp = cp.asnumpy(x)
+    xi_np = cp.asnumpy(xi)
+    xq_np = cp.asnumpy(xq)
     
-    xavg = cp.asnumpy(x_avg)
-    
-    del(x)
-    cp._default_memory_pool.free_all_blocks()
-    
-    return xnp,xavg,t
-    
-x1, xavg1, t = run_sim(1,0)
-x2, xavg2, t = run_sim(0,1)
-x3, xavg3, t = run_sim(1,1)
+    return xi_np, xq_np
+#
+# xi, xq = run_sim(0, 1)
+#
+# plt.plot(xi[2,0:100,:].transpose(),xq[2,0:100,:].transpose(),'k')
 
-#%%
+xi, xq = run_sim(1, 1)
 
-import matplotlib.pyplot as plt
+xiq = xi + 1j*xq
 
-range_I = 0.0004
-range_Q = 0.02
-
-
-I1 = x1[2,:]
-Q1 = x1[3,:]
+roiq_fft = np.fft.fft(xiq[0,0::100,:], axis=1)
+plt.plot(np.log(np.abs(roiq_fft.transpose())))
 
 plt.figure()
-plt.hist2d(I1,Q1,bins=100,range=[[-range_I, range_I],[-range_Q, range_Q]])
-plt.show()
-
-I2 = x2[2,:]
-Q2 = x2[3,:]
-
+plt.plot(np.log(np.abs(roiq_fft)))
 plt.figure()
-plt.hist2d(I2,Q2,bins=100,range=[[-range_I, range_I],[-range_Q, range_Q]])
-plt.show()
-
-I3 = x3[2,:]
-Q3 = x3[3,:]
-
-plt.figure()
-plt.hist2d(I3,Q3,bins=100,range=[[-range_I, range_I],[-range_Q, range_Q]])
-plt.show()
+plt.plot(np.real(roiq_sa),np.imag(roiq_sa))
