@@ -12,7 +12,7 @@ variations1 = 137
 variations2 = 77
 
 var_strs = ['a']
-exp_strs = ['1j*(-1)*a*omega_0 + A_s*(1j)*(-1)*exp(-1j*(omega_s * t)) - kappa*a']
+exp_strs = ['1j*(-1)*a*omega_0 + 10**(logA_s)*(1j)*(-1)*exp(-1j*(omega_s * t)) - kappa**2*a']
 
 
 omega_s0 = 5 * 2 * np.pi
@@ -23,7 +23,7 @@ A_s1 = 1
 
 params = [('omega_0', 10 * 2 * np.pi),
           ('omega_s', [omega_s0, omega_s1, variations1]),
-          ('A_s', [A_s0, A_s1, variations2]),
+          ('logA_s', [-5, 1, variations2]),
           ('kappa', 1.0 * 2 * np.pi),  # mode kappa
           ('phi', 0)]
 
@@ -46,7 +46,7 @@ print(time.time()-start_time)
 #%%
 
 
-amplitude = np.sqrt(x[0,:,:]**2 + x[1,:,:]**2)
+amplitude = np.log(np.sqrt(x[0,:,:]**2 + x[1,:,:]**2))
 print(amplitude)
 
 # plt.figure()

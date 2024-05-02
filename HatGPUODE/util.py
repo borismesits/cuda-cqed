@@ -87,8 +87,10 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
             exp_sps.append(exp_sp_R)
             exp_sps.append(exp_sp_I)
-            exp_c_R = convert_power_arg_to_float64(sp.ccode(exp_sp_R))
-            exp_c_I = convert_power_arg_to_float64(sp.ccode(exp_sp_I))
+            # exp_c_R = convert_power_arg_to_float64(sp.ccode(exp_sp_R))
+            # exp_c_I = convert_power_arg_to_float64(sp.ccode(exp_sp_I))
+            exp_c_R = sp.ccode(exp_sp_R)
+            exp_c_I = sp.ccode(exp_sp_I)
             exp_cs.append(exp_c_R)
             exp_cs.append(exp_c_I)
 
@@ -97,7 +99,8 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
             exp_sp = sp.sympify(exp_str)
 
             exp_sps.append(exp_sp)
-            exp_c = convert_power_arg_to_float64(sp.ccode(exp_sp))
+            # exp_c = convert_power_arg_to_float64(sp.ccode(exp_sp))
+            exp_c = sp.ccode(exp_sp)
             exp_cs.append(exp_c)
 
     kernel_input = 'float64 dt, float64 t, '
@@ -134,7 +137,8 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
     for i in range(0, len(params)):
 
-        try:
+        try: # this is for sweep variables (specifying a range and a number of points)
+
             param0 = params[i][1][0]
             param_vars = params[i][1][2]
             param_range = params[i][1][1] - params[i][1][0]
@@ -146,7 +150,7 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
             shape.append(param_vars)
 
-        except:
+        except: # this is for constant variables
             kernel_body += 'double ' + params[i][0] + ' = ' + str(float(params[i][1])) + 'f;\n'
 
     for i in range(0, sweep_num):
