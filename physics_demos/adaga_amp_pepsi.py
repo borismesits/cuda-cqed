@@ -15,10 +15,10 @@ weights = np.zeros(variations1*variations2) - 1
 weights[0:variations2] = 1
 
 var_strs = ['a','f']
-exp_strs = ['1j*(-1)*(a + (a + conjugate(a))**2 )*omega_0 + pump_on*A_p*cos(omega_p * t + phi) + signal_on*A_s*cos(omega_s * t) - kappa*(a + conjugate(a))',
+exp_strs = ['1j*(-1)*( a )*omega_0 + pump_on*A_p*cos(omega_p * t + phi) + signal_on*A_s*cos(omega_s * t) - kappa*(a + conjugate(a))',
             '1j*(-1)*f*omega_0 - kappa*(f + conjugate(f)) + 1j*a']
 
-chi = 0.5 * 2 * np.pi
+chi = 1.0 * 2 * np.pi
 
 params = [('omega_0', [10 * 2 * np.pi - chi/2, 10 * 2 * np.pi + chi/2, variations1]),
           ('omega_p', 20 * 2 * np.pi),
@@ -27,7 +27,7 @@ params = [('omega_0', [10 * 2 * np.pi - chi/2, 10 * 2 * np.pi + chi/2, variation
           ('A_s', 0.5),
           ('kappa', 1 * 2 * np.pi),  # mode kappa
           ('phi', 0),
-          ('signal_on', 1),
+          ('signal_on', 0),
           ('pump_on', 1)]
 
 kernel_input, kernel_output, kernel_body, kernel_op = generate_kernel(var_strs, exp_strs, params, use_complex=True)
@@ -38,14 +38,14 @@ print(kernel_output)
 
 N = len(var_strs)
 
-dt = 0.1/(10 * 2 * np.pi)
-steps = 3000
+dt = 0.01/(10 * 2 * np.pi)
+steps = 10000
 t = np.linspace(0, dt*steps, steps)
 
-save_i = np.round(10**np.linspace(1,3.2,5))
+save_i = np.round(10**np.linspace(1,3.9,5))
 
 noise_mask = cp.zeros([2*N, variations1*variations2])
-noise_mask[0, :] = 1e-3
+noise_mask[:, :] = 1e-3
 
 start_time = time.time()
 x, x_avg, saved_x = related_rates_problem(t, 2*N, variations1, variations2, kernel_op, noise_mask, save_i=save_i)

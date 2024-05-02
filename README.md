@@ -5,3 +5,8 @@ GPUs allow parallel sweeps in parameter space -> speedups up to 2 orders of magn
 Not just convenient, but a matter of necessity for certain useful computations, like noise studies that require many identical simulation shots
 
 This Github repo has tools that can translate familiar equations of motion into GPU-readable code, along with useful analysis code.
+
+
+### Todos/buglist
+
+- incorrectly declaring variables should be caught, current error is confusing ("not supported in C")

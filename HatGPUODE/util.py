@@ -100,7 +100,7 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
             exp_c = convert_power_arg_to_float64(sp.ccode(exp_sp))
             exp_cs.append(exp_c)
 
-    kernel_input = 'int8 index1, int8 index2, float64 dt, float64 t, '
+    kernel_input = 'int32 index1, int32 index2, float64 dt, float64 t, '
 
     for var_str in var_strs:
 

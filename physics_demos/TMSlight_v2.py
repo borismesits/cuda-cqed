@@ -22,7 +22,7 @@ weights[0:variations2] = 1
 
 var_strs = ['a','b','f']
 exp_strs = ['1j*(-1)*a*omega_a - kappa*(a + conjugate(a)) + signal_on*A_s*cos(omega_s * t) ',
-            '1j*(-1)*(b + (b + conjugate(b))**2 )*omega_0 + pump_on*A_p*cos(omega_p * t + phi) - kappa*(b + conjugate(b)) + 1j*a',
+            '1j*(-1)*(b + (b + conjugate(b))**2 )*omega_b + pump_on*A_p*cos(omega_p * t + phi) - kappa*(b + conjugate(b)) + 1j*a',
             '1j*(-1)*f*omega_a - kappa*(f + conjugate(f)) + 1j*b']
 
 chi = 1.0 * 2 * np.pi
@@ -31,12 +31,12 @@ params = [('omega_a', [10 * 2 * np.pi - chi/2, 10 * 2 * np.pi + chi/2, variation
           ('omega_b', 10 * 2 * np.pi),
           ('omega_p', 20 * 2 * np.pi),
           ('omega_s', 10 * 2 * np.pi),
-          ('A_p', 4.8),
-          ('A_s', 0.01),
+          ('A_p', 0.5),
+          ('A_s', 0.04),
           ('kappa', 1 * 2 * np.pi),  # mode kappa
           ('phi', 1),
           ('signal_on', 1),
-          ('pump_on', 1)]
+          ('pump_on', 0)]
 
 kernel_input, kernel_output, kernel_body, kernel_op = generate_kernel(var_strs, exp_strs, params, use_complex=True)
 
@@ -53,8 +53,10 @@ t = np.linspace(0, dt*steps, steps)
 save_i = np.round(10**np.linspace(1,3.2,5))
 
 noise_mask = cp.zeros([2*N, variations1*variations2])
-noise_mask[0, :] = 1e-4
-noise_mask[1, :] = 1e-4
+noise_mask[0, :] = 0.5e-4
+noise_mask[1, :] = 0.5e-4
+noise_mask[4, :] = 1e-5
+noise_mask[5, :] = 1e-5
 
 start_time = time.time()
 x, x_avg, saved_x = related_rates_problem(t, 2*N, variations1, variations2, kernel_op, noise_mask, save_i=save_i)
@@ -73,7 +75,7 @@ def gen_hist(I, Q, size=3, weights=None):
     hist_range = [[-range_I, range_I], [-range_Q, range_Q]]
     # hist_range = None
 
-    hist, x, y = np.histogram2d(I.flatten(), Q.flatten(), bins=300, range=hist_range, weights=weights)
+    hist, x, y = np.histogram2d(I.flatten(), Q.flatten(), bins=100, range=hist_range, weights=weights)
 
     return hist, x, y
 
@@ -84,7 +86,7 @@ fig = plt.figure(1)
 plt.clf()
 fig, axs = plt.subplots(rows, cols, num=1)
 
-hist_size = [0.1, 0.01]
+hist_size = [0.01, 0.01, 0.001]
 
 for j in range(0,cols):
 
@@ -97,6 +99,12 @@ for j in range(0,cols):
 
     den_hist, x, y = gen_hist(saved_x[2, :, :, j], saved_x[3, :, :, j], size=hist_size[1])
     num_hist, x, y = gen_hist(saved_x[2, :, :, j], saved_x[3, :, :, j], size=hist_size[1], weights=weights)
-    axs[1, j].pcolor(x, y, num_hist/den_hist, cmap='seismic',vmin=-1.5,vmax=1.5)
+    axs[1, j].pcolor(x, y, num_hist / den_hist, cmap='seismic', vmin=-1.5, vmax=1.5)
     axs[1, j].set_aspect('equal')
     axs[1, j].grid()
+
+    den_hist, x, y = gen_hist(saved_x[4, :, :, j], saved_x[5, :, :, j], size=hist_size[2])
+    num_hist, x, y = gen_hist(saved_x[4, :, :, j], saved_x[5, :, :, j], size=hist_size[2], weights=weights)
+    axs[2, j].pcolor(x, y, num_hist / den_hist, cmap='seismic', vmin=-1.5, vmax=1.5)
+    axs[2, j].set_aspect('equal')
+    axs[2, j].grid()

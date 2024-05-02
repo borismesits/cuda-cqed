@@ -62,6 +62,8 @@ def RK_loop(t, x, x_avg, x_var, f_dxdt, dt, kernel_op, idxs, save_i, noise_mask)
 
         x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4) + noise_mask * cp.random.normal(0, 1, size=(N, M))
 
+    x_avg[:, -1] = cp.mean(x, axis=1)
+
     return x, x_avg, saved_x
 
 
@@ -105,9 +107,9 @@ def related_rates_problem(t, N, variations1, variations2, kernel_op, noise_mask,
 
     IDX2, IDX1 = np.meshgrid(idx2, idx1)
 
-    idxs.append(cp.array(cp.array(IDX1.flatten(), dtype=np.int8)))
-    idxs.append(cp.array(cp.array(IDX2.flatten(), dtype=np.int8)))
+    idxs.append(cp.array(cp.array(IDX1.flatten(), dtype=np.int32)))
+    idxs.append(cp.array(cp.array(IDX2.flatten(), dtype=np.int32)))
 
     x, x_avg, saved_x = RK_loop(t, x0, x_avg, x_var, f_dxdt, dt, kernel_op, idxs, save_i, noise_mask)
 
-    return x, x_avg, saved_x
+    return cp.asnumpy(x), cp.asnumpy(x_avg), cp.asnumpy(saved_x)

@@ -3,10 +3,7 @@ import matplotlib.pyplot as plt
 import cupy as cp
 from HatGPUODE.util import generate_kernel
 from HatGPUODE.RK_solver import related_rates_problem
-import matplotlib
 import time
-
-matplotlib.use('Qt5Agg')
 
 variations1 = 2
 variations2 = 100000
