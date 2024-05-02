@@ -38,31 +38,32 @@ def RK_loop(t, x, x_avg, x_var, f_dxdt, dt, kernel_op, idxs, save_i, noise_mask)
     Implements an RK4 method.
 
     The indexing for the variable 'x', which contains all the solution data,
-    goes like: time steps, modes, variations/shots.
+    goes like: modes, variations/shots
 
-    So for example, 3 modes with 5 variations running for a hundred time steps
-    would have the shape (100, 3, 5).
+    So for example, 3 modes with 5 variations would have the shape (3, 5).
     '''
 
-    N, M = np.shape(cp.asnumpy(x))
+    shape = np.shape(cp.asnumpy(x))
 
-    saved_x = cp.zeros([N,M,len(save_i)])
+    print('Shape: ' + str(shape))
+
+    saved_x = cp.zeros([*shape, len(save_i)])
 
     for i in range(0, len(t) - 1):
-        x_avg[:, i] = cp.mean(x, axis=1)
+        # x_avg[:, i] = cp.mean(x, axis=1)
 
-        if np.any(save_i ==i):
-
-            saved_x[:,:,np.where(save_i == i)[0][0]] = x
+        # if np.any(save_i == i):
+        #
+        #     saved_x[:, :, np.where(save_i == i)[0][0]] = x
 
         k1 = f_dxdt(x, t[i], dt, kernel_op, idxs)
         k2 = f_dxdt(x + k1 * dt / 2, t[i] + dt / 2, dt, kernel_op, idxs)
         k3 = f_dxdt(x + k2 * dt / 2, t[i] + dt / 2, dt, kernel_op, idxs)
         k4 = f_dxdt(x + k3 * dt, t[i] + dt, dt, kernel_op, idxs)
 
-        x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4) + noise_mask * cp.random.normal(0, 1, size=(N, M))
+        x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4) #+ noise_mask * cp.random.normal(0, 1, size=(N, M))
 
-    x_avg[:, -1] = cp.mean(x, axis=1)
+    # x_avg[:, -1] = cp.mean(x, axis=1)
 
     return x, x_avg, saved_x
 
@@ -73,16 +74,18 @@ def f_dxdt(xi, t, dt, kernel_op, idxs):
     of the rate matrix represent transition rates.
     '''
 
-    args = [idxs[0], idxs[1], dt, t]
+    args = [dt, t]
 
     args.extend(list(xi))
+
+    args.extend(idxs)
 
     dxdt = kernel_op(*args)
 
     return cp.array(dxdt)
 
 
-def related_rates_problem(t, N, variations1, variations2, kernel_op, noise_mask, save_i=[-1]):
+def related_rates_problem(t, shape, kernel_op, noise_mask, save_i=[-1]):
     '''
     Wrapper for the RK loop that creates all the necessary arrays, since
     you can't create arrays inside of a jit function.
@@ -91,25 +94,31 @@ def related_rates_problem(t, N, variations1, variations2, kernel_op, noise_mask,
     vars is number of variations
     '''
 
-    x0 = cp.zeros([N, variations1 * variations2])
+    num_variations = np.product(shape[1:])
+
+    x0 = cp.zeros([shape[0], num_variations])
 
     dt = cp.array(t[1] - t[0])
 
     t = cp.array(t, dtype=cp.float64)
 
-    x_avg = cp.zeros([N, len(t)])
-    x_var = cp.zeros([N, len(t)])
+    x_avg = cp.zeros([shape[0], len(t)])
+    x_var = cp.zeros([shape[0], len(t)])
 
     idxs = []
 
-    idx1 = np.arange(0, variations1)
-    idx2 = np.arange(0, variations2)
+    for i in range(1, len(shape)):
+        idx = np.arange(0, shape[i])
+        idxs.append(idx)
 
-    IDX2, IDX1 = np.meshgrid(idx2, idx1)
+    IDXS = np.meshgrid(*idxs, indexing='ij')
+    IDXSCP = []
 
-    idxs.append(cp.array(cp.array(IDX1.flatten(), dtype=np.int32)))
-    idxs.append(cp.array(cp.array(IDX2.flatten(), dtype=np.int32)))
+    for i in range(0, len(shape)-1):
+        IDXSCP.append(cp.array(cp.array(IDXS[i].flatten(), dtype=np.int32)))
 
-    x, x_avg, saved_x = RK_loop(t, x0, x_avg, x_var, f_dxdt, dt, kernel_op, idxs, save_i, noise_mask)
+    x, x_avg, saved_x = RK_loop(t, x0, x_avg, x_var, f_dxdt, dt, kernel_op, IDXSCP, save_i, noise_mask)
 
-    return cp.asnumpy(x), cp.asnumpy(x_avg), cp.asnumpy(saved_x)
+    x = np.reshape(cp.asnumpy(x), shape)
+
+    return x, cp.asnumpy(x_avg), cp.asnumpy(saved_x)

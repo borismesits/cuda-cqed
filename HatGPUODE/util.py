@@ -100,7 +100,9 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
             exp_c = convert_power_arg_to_float64(sp.ccode(exp_sp))
             exp_cs.append(exp_c)
 
-    kernel_input = 'int32 index1, int32 index2, float64 dt, float64 t, '
+    kernel_input = 'float64 dt, float64 t, '
+
+    shape = [len(exp_cs)]
 
     for var_str in var_strs:
 
@@ -111,8 +113,6 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
         else:
             kernel_input += 'float64 ' + var_str + ', '
-
-    kernel_input = kernel_input[0:-2]  # removes trailing comma
 
     kernel_output = ''
 
@@ -125,7 +125,8 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
         else:
             kernel_output += 'float64 d' + var_str + 'dt' + ', '
 
-    kernel_output = kernel_output[0:-2]  # removes trailing comma
+
+    kernel_output = kernel_output[0:-2]
 
     kernel_body = ''
 
@@ -143,8 +144,16 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
             kernel_body += 'double ' + params[i][0] + ' = ' + str(float(param0)) + ' + index' + str(sweep_num) + '*' + str(
                 float(param_range)) + '/' + str(float(np.max([param_vars - 1, 1]))) + ';\n'
 
+            shape.append(param_vars)
+
         except:
             kernel_body += 'double ' + params[i][0] + ' = ' + str(float(params[i][1])) + 'f;\n'
+
+    for i in range(0, sweep_num):
+
+        kernel_input += 'int32 index' + str(i+1) + ', '
+
+    kernel_input = kernel_input[0:-2]  # removes trailing comma
 
     for i in range(0, len(var_strs)):
 
@@ -159,6 +168,10 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
             eom_line = 'd' + var_strs[i] + 'dt = ' + exp_cs[i] + '; \n'
             kernel_body += eom_line
 
+    print(kernel_input)
+    print(kernel_body)
+    print(kernel_output)
+
     kernel = cp.ElementwiseKernel(kernel_input, kernel_output, kernel_body, 'demo_ODE')
 
-    return kernel_input, kernel_output, kernel_body, kernel
+    return kernel_input, kernel_output, kernel_body, kernel, shape
