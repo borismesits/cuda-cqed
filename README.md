@@ -10,3 +10,5 @@ This Github repo has tools that can translate familiar equations of motion into 
 ### Todos/buglist
 
 - incorrectly declaring variables should be caught, current error is confusing ("not supported in C")
+- ~~arbitrary number of sweeps/automatic reshaping~~
+- decimation
