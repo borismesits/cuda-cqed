@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cupy as cp
 from HatGPUODE.util import generate_kernel
-from HatGPUODE_D.RK_solver import GPUODE_decimate
+from HatGPUODE.RK_solver import related_rates_problem
 import matplotlib
 import time
 
@@ -51,7 +51,7 @@ def rum_sim(w_in_i, w_in_f, w_in_pts, signalOn, pumpOn):
 
 
     start_time = time.time()
-    x, x_avg, saved_x = GPUODE_decimate(t, N, variations1, variations2, kernel_op, noise_mask, save_i=np.array([-1]))
+    x, x_avg, saved_x = related_rates_problem(t, N, variations1, variations2, kernel_op, noise_mask, save_i=np.array([-1]))
     print(time.time()-start_time)
 
     return x, x_avg, saved_x, t
@@ -62,3 +62,27 @@ w_in_pts = 1000
 w_in = np.linspace(w_in_i,w_in_f,w_in_pts)
 
 x1, x_avg1, saved_x1, t = rum_sim(w_in_i, w_in_f, w_in_pts, 1, 0)
+x2, x_avg2, saved_x2, t = rum_sim(w_in_i, w_in_f, w_in_pts, 0, 1)
+x3, x_avg3, saved_x3, t = rum_sim(w_in_i, w_in_f, w_in_pts, 1, 1)
+
+x1 = np.reshape(cp.asnumpy(x1), (9,10,w_in_pts))
+x2 = np.reshape(cp.asnumpy(x2), (9,10,w_in_pts))
+x3= np.reshape(cp.asnumpy(x3), (9,10,w_in_pts))
+
+start = 15000
+
+# plt.figure()
+#
+# freq = np.linspace(0,(len(t[start:])-1)/t[-start-1],len(t[start:])+1)[0:-1]
+#
+# plt.loglog(freq, np.abs(np.fft.fft(x_avg1[5,start:])))
+# plt.loglog(freq, np.abs(np.fft.fft(x_avg2[5,start:])))
+# plt.loglog(freq, np.abs(np.fft.fft(x_avg3[5,start:])))
+
+plt.figure()
+
+gain = (x3[7,0:7,:]**2+x3[8,0:7,:]**2)/(x1[7,0:7,:]**2+x1[8,0:7,:]**2)
+
+plt.semilogy(w_in/(2*np.pi),gain.transpose())
+
+

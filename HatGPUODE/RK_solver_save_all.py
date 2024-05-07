@@ -3,37 +3,24 @@ import sympy as sp
 import numpy as np
 
 
-def RK_loop(t, x, x_avg, x_var, f_dxdt, dt, kernel_op, idxs, save_i):
-    '''
-    Implements an RK4 method.
 
-    The indexing for the variable 'x', which contains all the solution data,
-    goes like: modes (N), variations/shots (M)
+def RK_loop_saveall(t, x0, f_dxdt, dt, kernel_op, idxs):
 
-    So for example, 3 modes with 5 variations would have the shape (3, 5).
-    '''
+    shape = np.shape(cp.asnumpy(x0))
 
-    N, M = np.shape(cp.asnumpy(x))
+    x = cp.zeros([N, M, len(t)])
 
-    saved_x = cp.zeros([N, M, len(save_i)])
+    x[:, :, 0] = x0
 
     for i in range(0, len(t) - 1):
-        # x_avg[:, i] = cp.mean(x, axis=1)
+        k1 = f_dxdt(x[:, :, i], t[i], dt, kernel_op, idxs)
+        k2 = f_dxdt(x[:, :, i] + k1 * dt / 2, t[i] + dt / 2, dt, kernel_op, idxs)
+        k3 = f_dxdt(x[:, :, i] + k2 * dt / 2, t[i] + dt / 2, dt, kernel_op, idxs)
+        k4 = f_dxdt(x[:, :, i] + k3 * dt, t[i] + dt, dt, kernel_op, idxs)
 
-        # if np.any(save_i == i):
-        #
-        #     saved_x[:, :, np.where(save_i == i)[0][0]] = x
+        x[:, :, i + 1] = x[:, :, i] + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
 
-        k1 = f_dxdt(x, t[i], dt, kernel_op, idxs)
-        k2 = f_dxdt(x + k1 * dt / 2, t[i] + dt / 2, dt, kernel_op, idxs)
-        k3 = f_dxdt(x + k2 * dt / 2, t[i] + dt / 2, dt, kernel_op, idxs)
-        k4 = f_dxdt(x + k3 * dt, t[i] + dt, dt, kernel_op, idxs)
-
-        x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
-
-    # x_avg[:, -1] = cp.mean(x, axis=1)
-
-    return x, x_avg, saved_x
+    return x
 
 
 def f_dxdt(xi, t, dt, kernel_op, idxs):
@@ -64,18 +51,16 @@ def GPUODE_light(t, shape, kernel_op, save_i=[-1]):
     vars is number of variations
     '''
 
-    M = np.product(shape[1:])
+    num_variations = np.product(shape[1:])
 
-    N = shape[0]
-
-    x0 = cp.zeros([N, M])
+    x0 = cp.zeros([shape[0], num_variations])
 
     dt = cp.array(t[1] - t[0])
 
     t = cp.array(t, dtype=cp.float64)
 
-    x_avg = cp.zeros([N, len(t)])
-    x_var = cp.zeros([N, len(t)])
+    x_avg = cp.zeros([shape[0], len(t)])
+    x_var = cp.zeros([shape[0], len(t)])
 
     idxs = []
 
