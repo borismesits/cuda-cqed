@@ -8,7 +8,7 @@ This file is a util for converting Hamiltonians (symbolic description of Hermiti
 
 var_strs = ['a']
 
-exp_str = ['a*sdfasdf(a)']
+exp_str = ['a*conj(a)']
 
 symbols = sp.symbols(var_strs)
 

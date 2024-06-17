@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cupy as cp
 from HatGPUODE.util import generate_kernel
-from HatGPUODE_D.RK_solver import GPUODE_decimate
+from HatGPUODE_D.RK_solver_decimate import GPUODE_decimate
 import matplotlib
 import time
 

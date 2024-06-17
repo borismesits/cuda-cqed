@@ -2,6 +2,7 @@ import cupy as cp
 import sympy as sp
 import numpy as np
 import sympy
+from sympy import pycode
 
 
 def convert_power_arg_to_float64(inputt):
@@ -45,14 +46,16 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
                                                             cupy kernel itself.
     '''
 
-    exp_sps = []
-    exp_cs = []
+    exp_sps = [] # sympy translation
+    exp_cs = [] # C code translation
+
+    param_dict = {}
 
     for exp_str in exp_strs:
 
         if use_complex:
             '''
-            Sympy has a very convenient function called sympify, but it's also very oddly implemented. So I need to 
+            Sympy has a very convenient function called sympify, but it has tricky requirements. So I need to 
             define all the variables and parameters as sympy objects first, and then tell sympy to assume they are
             real-valued.
             '''
@@ -150,8 +153,12 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
             shape.append(param_vars)
 
+            param_dict[params[i][0]] = np.linspace(params[i][1][0], params[i][1][1], params[i][1][2])
+
         except: # this is for constant variables
             kernel_body += 'double ' + params[i][0] + ' = ' + str(float(params[i][1])) + 'f;\n'
+
+            param_dict[params[i][0]] = params[i][1]
 
     for i in range(0, sweep_num):
 
@@ -178,4 +185,61 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
     kernel = cp.ElementwiseKernel(kernel_input, kernel_output, kernel_body, 'demo_ODE')
 
-    return kernel_input, kernel_output, kernel_body, kernel, shape
+    return kernel_input, kernel_output, kernel_body, kernel, shape, param_dict
+
+def generate_pycode(var_strs, exp_strs, params, use_complex=False):
+    '''
+    ~~Similar to above but for generating python code to run simulations, encoded in the same format, on CPU~~
+    Sympy's printer is not actually that useful here, so all this does is rewrite M complex-valued EOMs as 2M real-valued EOMs
+    '''
+
+    exp_sps = [] # sympy translation
+    exp_nps = [] # numpy translation
+
+    for exp_str in exp_strs:
+
+        if use_complex:
+
+            symbols = sp.symbols(var_strs)
+
+            symbols_and_parameters_dict = {}
+
+            symbols_and_parameters_dict['t'] = sp.Symbol('t', real=True) # t is a special variable
+
+            for i in range(0, len(params)):
+                parameter = sp.Symbol(params[i][0], real=True)
+                symbols_and_parameters_dict[params[i][0]] = parameter
+
+            for i in range(0, len(var_strs)):
+                symbol = sp.Symbol(var_strs[i], real=True)
+                symbols_and_parameters_dict[var_strs[i]] = symbols[i]
+
+            exp_sp = sp.sympify(exp_str, locals=symbols_and_parameters_dict)
+
+            for i in range(0, len(var_strs)):
+
+                symbol_R = sp.Symbol(var_strs[i] + '_R',real=True)
+                symbol_I = sp.Symbol(var_strs[i] + '_I',real=True)
+
+                exp_sp = exp_sp.subs(symbols[i], symbol_R + 1j*symbol_I)
+
+            exp_sp_R = sp.re(exp_sp)
+            exp_sp_I = sp.im(exp_sp)
+            exp_sps.append(exp_sp_R)
+            exp_sps.append(exp_sp_I)
+
+
+            exp_np_R = pycode(exp_sp_R, fully_qualified_modules=False)
+            exp_np_I = pycode(exp_sp_I, fully_qualified_modules=False)
+            exp_nps.append(exp_np_R)
+            exp_nps.append(exp_np_I)
+
+
+        else:
+            exp_sp = sp.sympify(exp_str)
+            exp_sps.append(exp_sp)
+
+            exp_np = pycode(exp_sp, fully_qualified_modules=False)
+            exp_nps.append(exp_np)
+
+    return exp_nps

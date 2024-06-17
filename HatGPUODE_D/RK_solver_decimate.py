@@ -3,7 +3,7 @@ import sympy as sp
 import numpy as np
 
 
-def RK_loop_decimate(x, f_dxdt, dt, kernel_op, idxs, d_factor, d_omega, S):
+def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
     '''
     Implements a GPU-accelerated RK4 method for simulating systems of ODEs, with built-in decimation of the
     data to reduce amount of saved information.
@@ -56,8 +56,7 @@ def RK_loop_decimate(x, f_dxdt, dt, kernel_op, idxs, d_factor, d_omega, S):
 
 def f_dxdt(xi, t, dt, kernel_op, idxs):
     '''
-    Equation of motion for related rates problem. The off-diagonal elements
-    of the rate matrix represent transition rates.
+    This just formats the array data to be passed into the GPU kernel
     '''
 
     args = [dt, t]
@@ -100,7 +99,7 @@ def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S):
     d_omega = cp.array(d_omega.flatten(), dtype=cp.float64) # convert digitization-related arrays to cupy
     dt = cp.array(dt.flatten(), dtype=cp.float64)
 
-    I_demod, Q_demod, t_d = RK_loop_decimate(x0, f_dxdt, dt, kernel_op, IDXSCP, d_factor, d_omega, S)
+    I_demod, Q_demod, t_d = RK_loop_decimate(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S)
 
     I_demod = np.reshape(cp.asnumpy(I_demod), (*shape, S//d_factor))
     Q_demod = np.reshape(cp.asnumpy(Q_demod), (*shape, S//d_factor))

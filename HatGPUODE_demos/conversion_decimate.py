@@ -17,27 +17,27 @@ exp_strs = ['x2',
             '-w_in**2 * r1 - kappa_r*r2 + x3']
 
 
-w_in_i = 5e9 * 2 * np.pi
-w_in_f = 7e9 * 2 * np.pi
+w_in_i = 5.5e9 * 2 * np.pi
+w_in_f = 6.5e9 * 2 * np.pi
 swp_pts = 100
 
 params = [('w_0', 6e9 * 2 * np.pi),
-          ('amp_in', [0, 0.0001, 2]),  # signal amplitude
-          ('phi_max', [0, 50, 30]),  # pump amplitude
-          ('kappa', 0.5e9 * 2 * np.pi),  # mode decay rate
-          ('kappa_r', 1e8 * 2 * np.pi),  # filter bandwidth
+          ('amp_in', [0, 0.0001, 2]), # signal amplitude
+          ('phi_max', [0, 1, 30]), # pump amplitude
+          ('kappa', 1e7 * 2 * np.pi),  # mode decay rate
+          ('kappa_r', 1e8 * 2 * np.pi), # filter bandwidth
           ('phase_in', [0, 2*np.pi, 21]),
-          ('pf', 2),  # pump frequency factor
+          ('pf', 2), # pump frequency factor
           ('phi_DC', np.pi/2),
           ('w_J', 3e9 * 2 * np.pi),
-          ('w_in', [w_in_i, w_in_f, swp_pts])]  # signal frequency
+          ('w_in', [w_in_i, w_in_f, swp_pts])] # signal frequency
 
 kernel_input, kernel_output, kernel_body, kernel_op, shape, var_dict = generate_kernel(var_strs, exp_strs, params, use_complex=False)
 
 print('Shape: ' + str(shape))
 
-PTS_PER_CYCLE = 20
-NUM_CYCLES = 1000
+PTS_PER_CYCLE = 100
+NUM_CYCLES = 200
 
 D_FACTOR = PTS_PER_CYCLE # decimation factor
 
@@ -64,7 +64,7 @@ phase = np.arctan(Q_demod/I_demod)
 modeN = 2
 
 plt.figure()
-pwrgain = 20*np.log10(amp_min[modeN,1,:,:,-1]/amp_min[modeN,1,0,:,-1])
+pwrgain = 20*np.log10(amp_max[modeN,1,:,:,-1]/amp_max[modeN,1,0,:,-1])
 plt.pcolor(var_dict['w_in']/(2*np.pi), var_dict['phi_max'], pwrgain, cmap='seismic')
 plt.colorbar()
 plt.clim([-20,20])
@@ -84,26 +84,17 @@ plt.colorbar()
 plt.clim([-20,20])
 plt.contour(var_dict['w_in']/(2*np.pi), var_dict['phi_max'], pwrgain,'k--', levels=[20])
 
-plt.figure()
-pwrgain = amp_max[modeN,1,:,:,-1]/amp_max[modeN,1,0,:,-1]
-plt.plot(var_dict['w_in']/(2*np.pi), pwrgain[0:20,:].transpose()/np.max(pwrgain[0:20,:],axis=1))
 
-
-
-
-phi_max_i = 7
-w_in_i = 20
+phi_max_i = 5
+w_in_i = 51
 phase_i = 0
 
 plt.figure()
-plt.plot(t_d[0,-1,phase_i,w_in_i,:], I_demod[modeN,0,phi_max_i,phase_i,w_in_i,:],'b',label='Signal off, pump on, I')
-plt.plot(t_d[0,-1,phase_i,w_in_i,:], Q_demod[modeN,0,phi_max_i,phase_i,w_in_i,:],'b--',label='Signal off, pump on, Q')
+plt.plot(t_d[0,-1,phase_i,w_in_i,:], I_demod[modeN,0,phi_max_i,phase_i,w_in_i,:],label='Signal off, pump on')
 
-plt.plot(t_d[0,-1,phase_i,w_in_i,:], I_demod[modeN,1,0,phase_i,w_in_i,:],'r',label='Signal on, pump off, I')
-plt.plot(t_d[0,-1,phase_i,w_in_i,:], I_demod[modeN,1,0,phase_i,w_in_i,:],'r--',label='Signal on, pump off, Q')
+plt.plot(t_d[0,-1,phase_i,w_in_i,:], I_demod[modeN,1,0,phase_i,w_in_i,:],label='Signal on, pump off')
 
-plt.plot(t_d[0,-1,phase_i,w_in_i,:], I_demod[modeN,1,phi_max_i,phase_i,w_in_i,:],'g',label='Signal on, pump on, I')
-plt.plot(t_d[0,-1,phase_i,w_in_i,:], I_demod[modeN,1,phi_max_i,phase_i,w_in_i,:],'g--',label='Signal on, pump on, Q')
+plt.plot(t_d[0,-1,phase_i,w_in_i,:], I_demod[modeN,1,phi_max_i,phase_i,w_in_i,:],label='Signal on, pump on')
 plt.legend()
 
 
@@ -123,7 +114,7 @@ plt.legend()
 '''
 the problem is that calculating the output light (not the intracavity light) has an arbitrary constant of integration,
 and if you don't pick the right C (or start integration with offset) depending on RHS phase, then you get a DC component 
-in the output that messes up the demodulation. 
+in the output that messes up the demodulation.
 
 however, I think this just gets filtered out with demodulation, so you should only see it if demod freq is 0
 '''
