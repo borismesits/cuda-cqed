@@ -31,7 +31,7 @@ def convert_power_arg_to_float64(inputt):
     return string
 
 
-def generate_kernel(var_strs, exp_strs, params, use_complex=False):
+def generate_kernel(var_strs, exp_strs, param_dict, use_complex=False):
     '''
 
     :param var_strs: The list of strings containing the names of quadratures (indep. variables in ODEs)
@@ -48,8 +48,6 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
     exp_sps = [] # sympy translation
     exp_cs = [] # C code translation
-
-    param_dict = {}
 
     for exp_str in exp_strs:
 
@@ -68,9 +66,11 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
             parameters = []
 
-            for i in range(0, len(params)):
-                parameter = sp.Symbol(params[i][0], real=True)
-                symbols_and_parameters_dict[params[i][0]] = parameter
+            param_dict_keys = list(param_dict.keys())
+
+            for i in range(0, len(param_dict_keys)):
+                parameter = sp.Symbol(param_dict_keys[i], real=True)
+                symbols_and_parameters_dict[param_dict_keys[i]] = parameter
 
             for i in range(0, len(var_strs)):
                 symbol = sp.Symbol(var_strs[i], real=True)
@@ -138,27 +138,23 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
     sweep_num = 0
 
-    for i in range(0, len(params)):
+    for i in range(0, len(param_dict_keys)):
 
         try: # this is for sweep variables (specifying a range and a number of points)
 
-            param0 = params[i][1][0]
-            param_vars = params[i][1][2]
-            param_range = params[i][1][1] - params[i][1][0]
+            param0 = param_dict[param_dict_keys[i]][0]
+            param_vars = param_dict[param_dict_keys[i]][2]
+            param_range = param_dict[param_dict_keys[i]][1] - param_dict[param_dict_keys[i]][0]
 
             sweep_num += 1
 
-            kernel_body += 'double ' + params[i][0] + ' = ' + str(float(param0)) + ' + index' + str(sweep_num) + '*' + str(
+            kernel_body += 'double ' + param_dict_keys[i] + ' = ' + str(float(param0)) + ' + index' + str(sweep_num) + '*' + str(
                 float(param_range)) + '/' + str(float(np.max([param_vars - 1, 1]))) + ';\n'
 
             shape.append(param_vars)
 
-            param_dict[params[i][0]] = np.linspace(params[i][1][0], params[i][1][1], params[i][1][2])
-
         except: # this is for constant variables
-            kernel_body += 'double ' + params[i][0] + ' = ' + str(float(params[i][1])) + 'f;\n'
-
-            param_dict[params[i][0]] = params[i][1]
+            kernel_body += 'double ' + param_dict_keys[i] + ' = ' + str(float(param_dict[param_dict_keys[i]])) + 'f;\n'
 
     for i in range(0, sweep_num):
 
@@ -185,9 +181,9 @@ def generate_kernel(var_strs, exp_strs, params, use_complex=False):
 
     kernel = cp.ElementwiseKernel(kernel_input, kernel_output, kernel_body, 'demo_ODE')
 
-    return kernel_input, kernel_output, kernel_body, kernel, shape, param_dict
+    return kernel_input, kernel_output, kernel_body, kernel, shape
 
-def generate_pycode(var_strs, exp_strs, params, use_complex=False):
+def generate_pycode(var_strs, exp_strs, param_dict, use_complex=False):
     '''
     ~~Similar to above but for generating python code to run simulations, encoded in the same format, on CPU~~
     Sympy's printer is not actually that useful here, so all this does is rewrite M complex-valued EOMs as 2M real-valued EOMs
@@ -206,9 +202,11 @@ def generate_pycode(var_strs, exp_strs, params, use_complex=False):
 
             symbols_and_parameters_dict['t'] = sp.Symbol('t', real=True) # t is a special variable
 
-            for i in range(0, len(params)):
-                parameter = sp.Symbol(params[i][0], real=True)
-                symbols_and_parameters_dict[params[i][0]] = parameter
+            param_dict_keys = list(param_dict.keys())
+
+            for i in range(0, len(param_dict_keys)):
+                parameter = sp.Symbol(param_dict_keys[i], real=True)
+                symbols_and_parameters_dict[param_dict_keys[i]] = parameter
 
             for i in range(0, len(var_strs)):
                 symbol = sp.Symbol(var_strs[i], real=True)

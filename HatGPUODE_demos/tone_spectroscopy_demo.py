@@ -58,3 +58,29 @@ plt.semilogy(SimpleSim.paramsweep_dict['logA'], I[0, :, -1].transpose())
 
 plt.figure(5)
 plt.semilogy(t.transpose(), I[0, :, :].transpose())
+
+SimpleSim.add_param('omega_adc', 25e9*2*pi, is_excitation=True)
+I, Q, t = SimpleSim.solve()
+
+plt.figure(3)
+plt.plot(I[0, :, :].transpose(), Q[0, :, :].transpose())
+
+plt.figure(4)
+plt.semilogy(SimpleSim.paramsweep_dict['logA'], I[0, :, -1].transpose())
+
+
+plt.figure(5)
+plt.semilogy(t.transpose(), I[0, :, :].transpose())
+
+SimpleSim.add_param('omega_adc', 35e9*2*pi, is_excitation=True)
+I, Q, t = SimpleSim.solve()
+
+plt.figure(3)
+plt.plot(I[0, :, :].transpose(), Q[0, :, :].transpose())
+
+plt.figure(4)
+plt.semilogy(SimpleSim.paramsweep_dict['logA'], I[0, :, -1].transpose())
+plt.grid()
+
+plt.figure(5)
+plt.semilogy(t.transpose(), I[0, :, :].transpose())

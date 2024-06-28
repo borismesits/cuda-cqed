@@ -20,7 +20,8 @@ class Sim():
     '''
     def __init__(self):
 
-        self.params_list = []
+        self.param_dict = {}
+        self.paramsweep_dict = {}
         self.solve_type = ''
         self.var_strs = []
         self.eom_strs = []
@@ -40,18 +41,27 @@ class Sim():
         self.var_strs.append(var_str)
         self.eom_strs.append(eom_str)
 
-    def add_param(self, name, value, isExcitation=False):
+    def add_param(self, name, value, is_excitation=False):
 
-        self.params_list.append((name, value))
+        self.param_dict[name] = value
+        self.paramsweep_dict[name] = value
 
-        if isExcitation:
+        if is_excitation:
             self.excitation_freq = name
 
-    def add_paramsweep(self, name, value_i, value_f, pts, isExcitation=False):
+    def add_paramsweep(self, name, value_i, value_f, pts, is_excitation=False):
 
-        self.params_list.append((name, [value_i, value_f, pts]))
+        self.param_dict[name] = [value_i, value_f, pts]
+        self.paramsweep_dict[name] = np.linspace(value_i, value_f, pts)
 
-        if isExcitation:
+        '''
+        The reason to store the two param_dicts separately is that we can't pass a list of values efficiently into
+        a cupy kernel. We need to generate the linear sweep inside the kernel, and we only build the initial and final
+        values and the number of steps into the definition of the kernel. However, it's handy for plotting to have 
+        the array of values in an numpy array.
+        '''
+
+        if is_excitation:
             self.excitation_freq = name
 
     def set_solve_type(self, type_str):
@@ -79,16 +89,17 @@ class Sim():
 
         pass
 
-    def specify_time(self, pts_per_cycle, num_cycles):
+    def specify_time(self, pts_per_cycle, num_cycles, d_factor=1):
 
         self.PTS_PER_CYCLE = pts_per_cycle
         self.NUM_CYCLES = num_cycles
+        self.d_factor_mult = d_factor
 
     def initialize_time(self):
 
         if self.solve_type == 'decimate':
 
-            self.D_FACTOR = self.PTS_PER_CYCLE  # decimation factor
+            self.D_FACTOR = self.PTS_PER_CYCLE*self.d_factor_mult  # decimation factor
 
             # below is the decimation frequency
 
@@ -124,21 +135,21 @@ class Sim():
             return
 
         try:
-            kernel_input, kernel_output, kernel_body, kernel_op, shape, param_dict = generate_kernel(self.var_strs, self.eom_strs,
-                                                                                                   self.params_list,
+
+            kernel_input, kernel_output, kernel_body, kernel_op, shape = generate_kernel(self.var_strs, self.eom_strs,
+                                                                                                   self.param_dict,
                                                                                                    use_complex=self.use_complex)
             self.kernel_input = kernel_input
             self.kernel_output = kernel_output
             self.kernel_body = kernel_body
             self.kernel_op = kernel_op
             self.shape = shape
-            self.param_dict = param_dict
 
-            self.eom_nps = generate_pycode(self.var_strs, self.eom_strs, self.params_list, use_complex=self.use_complex)
+            self.eom_nps = generate_pycode(self.var_strs, self.eom_strs, self.param_dict, use_complex=self.use_complex)
 
             self.initialize_time()
 
-            self.make_param_dict_nosweep()
+            self.make_quicktrace_param_dict()
 
             print('Simulation validation success!')
 
@@ -151,8 +162,6 @@ class Sim():
         advantage comes with massive parallelization. Thus, this function runs a CPU simulation, saving all data, for
         just a single variation.
         '''
-
-        self.validate()
 
         dt = 2*np.pi/(self.param_dict_nosweep[self.excitation_freq]*self.PTS_PER_CYCLE)
 
@@ -175,7 +184,7 @@ class Sim():
 
         return x, t
 
-    def make_param_dict_nosweep(self):
+    def make_quicktrace_param_dict(self):
 
         '''Quick solve doesn't so sweeps, so this function just picks the middle value from a sweep as a default'''
 
