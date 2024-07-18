@@ -6,7 +6,7 @@ matplotlib.use('Qt5Agg')
 
 pi = np.pi
 
-SimpleSim = Sim(use_complex=True)
+SimpleSim = Sim()
 
 SimpleSim.add_param('omega_0', 9e9*2*pi)
 SimpleSim.add_param('omega_d1', 8e9*2*pi)
@@ -16,14 +16,17 @@ SimpleSim.add_param('kappa', 1e9*2*pi)
 SimpleSim.add_param('g', 5e9*2*pi)
 SimpleSim.add_paramsweep('logA', 6, 10, 90)
 
-SimpleSim.add_EOM('a', '-1j*omega_0*a -1j*g*(a)**3 + 10**(logA)*cos(omega_d1*t) + 10**(logA)*cos(omega_d2*t) - kappa*a')
+
+SimpleSim.add_EOM('a', '-1j*omega_0*a -1j*g*(a)**4 + 10**(logA)*cos(omega_d1*t) + 0*10**(logA)*cos(omega_d2*t) - kappa*a')
 SimpleSim.set_solve_type('decimate')
+
+SimpleSim.use_complex = True
 
 SimpleSim.specify_time(10, 1200, d_factor=120)
 
 SimpleSim.validate()
 
-SimpleSim.param_dict_nosweep['logA'] = 9.4
+SimpleSim.param_dict_nosweep['logA'] = 9
 x, t = SimpleSim.quick_trace()
 
 plt.figure(1)

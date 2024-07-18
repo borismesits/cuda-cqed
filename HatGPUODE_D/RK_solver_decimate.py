@@ -1,7 +1,7 @@
 import cupy as cp
 import sympy as sp
 import numpy as np
-
+from tqdm import tqdm
 
 def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
     '''
@@ -14,6 +14,8 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
 
     '''
 
+    print('Running GPU solve...')
+
     N, M = np.shape(cp.asnumpy(x))
 
     integrated_I = x*0
@@ -24,10 +26,19 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
 
     t_d = cp.zeros([M, S // d_factor])
 
-    for i in range(0, S - 1):
+    for i in tqdm(range(0, S), colour="BLUE"):
         '''
         The first five lines implement the RK4 method
         '''
+
+        if i % d_factor == 0:
+
+            I_demod[:, :, i // d_factor] = 2*integrated_I  # factor of two comes from the 2 in cos(x)^2 = 1/2 + cos(2x)/2
+            Q_demod[:, :, i // d_factor] = 2*integrated_Q
+            t_d[:, i // d_factor] = dt*i
+
+            integrated_I = x * 0
+            integrated_Q = x * 0
 
         ti = dt*i
 
@@ -41,15 +52,14 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
         integrated_I += x * cp.cos(d_omega * ti) / d_factor
         integrated_Q += x * cp.sin(d_omega * ti) / d_factor
 
-        if i % d_factor == 0:
 
-            I_demod[:, :, i // d_factor] = integrated_I
-            Q_demod[:, :, i // d_factor] = integrated_Q
-            t_d[:, i // d_factor] = ti
 
-            integrated_I = x * 0
-            integrated_Q = x * 0
+    # I_demod = I_demod[:, :, 1:]
+    # Q_demod = Q_demod[:, :, 1:]
+    # t_d = t_d[:, 1:]
 
+    print(' ')
+    print('...finished GPU solve!')
 
     return I_demod, Q_demod, t_d
 
@@ -70,7 +80,7 @@ def f_dxdt(xi, t, dt, kernel_op, idxs):
     return cp.array(dxdt)
 
 
-def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S):
+def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs):
     '''
     Wrapper for the RK loop that creates all the necessary arrays, since
     you can't create arrays inside a jit function.
@@ -79,10 +89,14 @@ def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S):
     M is number of variations
     '''
 
-    M = np.product(shape[1:])
+    M = int(np.product(shape[1:]))
     N = shape[0]
 
     x0 = cp.zeros([N, M])
+
+    for i in range(0,N):
+
+        x0[i,:] = ICs[i]
 
     idxs = []
 

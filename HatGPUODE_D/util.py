@@ -31,7 +31,7 @@ def convert_power_arg_to_float64(inputt):
     return string
 
 
-def generate_kernel(var_strs, exp_strs, param_dict, use_complex=False):
+def generate_kernel(var_strs, exp_strs, param_dict, use_complex=False, print_result=False):
     '''
 
     :param var_strs: The list of strings containing the names of quadratures (indep. variables in ODEs)
@@ -175,9 +175,10 @@ def generate_kernel(var_strs, exp_strs, param_dict, use_complex=False):
             eom_line = 'd' + var_strs[i] + 'dt = ' + exp_cs[i] + '; \n'
             kernel_body += eom_line
 
-    print(kernel_input)
-    print(kernel_body)
-    print(kernel_output)
+    if print_result:
+        print(kernel_input)
+        print(kernel_body)
+        print(kernel_output)
 
     kernel = cp.ElementwiseKernel(kernel_input, kernel_output, kernel_body, 'demo_ODE')
 

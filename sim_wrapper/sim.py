@@ -18,28 +18,41 @@ class Sim():
         - calls the solver code
         - presents some plotting functions.
     '''
-    def __init__(self):
+    def __init__(self, use_complex=False):
 
         self.param_dict = {}
         self.paramsweep_dict = {}
         self.solve_type = ''
         self.var_strs = []
         self.eom_strs = []
-        self.use_complex = False  # are the dependent variables complex (like Langevin equation) or real (like classical)?
+        self.ICs = []
+        self.use_complex = use_complex  # are the dependent variables complex (like Langevin equation) or real (like classical)?
         self.excitation_freq = '' # the name of a special variable that represents a drive or pump frequency. Determines decimation parameters. Only one variable can be this
         self.PTS_PER_CYCLE = None
         self.NUM_CYCLES = None
 
-    def add_EOM(self, var_str, eom_str):
+    def make_pulse(self, omega, A, phi, start, stop, ramp):
+
+        return str(A) + '*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(start) + ')/' + str(
+            ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + '))'
+
+    def add_EOM(self, var_str, eom_str, IC=0):
         '''
         In order for the solver to parse our description of some set of equations, we need to specify the following.
         You can also add parameters in a later step.
         :param var_list: list of strings, the names of dependent vars (not time)
         :param eom_list: the equations of motion
+        :param IC: initial condition
         '''
 
         self.var_strs.append(var_str)
         self.eom_strs.append(eom_str)
+
+        if self.use_complex:
+            self.ICs.append(np.real(IC))
+            self.ICs.append(np.imag(IC))
+        else:
+            self.ICs.append(IC)
 
     def add_param(self, name, value, is_excitation=False):
 
@@ -47,7 +60,7 @@ class Sim():
         self.paramsweep_dict[name] = value
 
         if is_excitation:
-            self.excitation_freq = name
+            self.excitation_freq = value
 
     def add_paramsweep(self, name, value_i, value_f, pts, is_excitation=False):
 
@@ -62,7 +75,7 @@ class Sim():
         '''
 
         if is_excitation:
-            self.excitation_freq = name
+            self.excitation_freq = np.linspace(value_i, value_f, pts)
 
     def set_solve_type(self, type_str):
         '''
@@ -81,17 +94,18 @@ class Sim():
             warnings.warn("Specified solve type not found.", RuntimeWarning)
             return
 
-    def set_ICs(self):
-        '''
-        by default initial conditions are all zero. Change that here
-        :return:
-        '''
-
-        pass
-
     def specify_time(self, pts_per_cycle, num_cycles, d_factor=1):
+        '''
+        :param pts_per_cycle: Integration points per cycle, where a cycle is the period of the excitation frequency (see add_param())
+        :param num_cycles: How many cycles or periods to run the simulation for
+        :param d_factor: By default, the data is decimated over every cycle (not half cycle). You can make the decimation window larger by this factor
+        '''
 
         self.PTS_PER_CYCLE = pts_per_cycle
+
+        if pts_per_cycle < 20:
+            warnings.warn("Points per cycle recommended to be at least 20 for accuracy.", RuntimeWarning)
+
         self.NUM_CYCLES = num_cycles
         self.d_factor_mult = d_factor
 
@@ -103,7 +117,7 @@ class Sim():
 
             # below is the decimation frequency
 
-            excitation_freq = self.param_dict[self.excitation_freq]
+            excitation_freq = self.excitation_freq
 
             self.d_omega = np.ones(self.shape[1:]) * excitation_freq
 
@@ -116,7 +130,7 @@ class Sim():
         else:
             raise NotImplementedError
 
-    def validate(self):
+    def validate(self, print_result=False):
 
         if self.eom_strs == []:
             warnings.warn("No equations of motion defined. Use Sim.add_EOM().", RuntimeWarning)
@@ -138,7 +152,7 @@ class Sim():
 
             kernel_input, kernel_output, kernel_body, kernel_op, shape = generate_kernel(self.var_strs, self.eom_strs,
                                                                                                    self.param_dict,
-                                                                                                   use_complex=self.use_complex)
+                                                                                                   use_complex=self.use_complex, print_result=print_result)
             self.kernel_input = kernel_input
             self.kernel_output = kernel_output
             self.kernel_body = kernel_body
@@ -163,13 +177,14 @@ class Sim():
         just a single variation.
         '''
 
-        dt = 2*np.pi/(self.param_dict_nosweep[self.excitation_freq]*self.PTS_PER_CYCLE)
 
-        t = np.linspace(0, dt*self.PTS_PER_CYCLE*self.NUM_CYCLES, self.PTS_PER_CYCLE*self.NUM_CYCLES)
+        dt = 2*np.pi/(self.excitation_freq_no_sweep*self.PTS_PER_CYCLE)
+
+        t = np.linspace(0, dt*self.PTS_PER_CYCLE*self.NUM_CYCLES, self.PTS_PER_CYCLE*self.NUM_CYCLES+1)[0:self.PTS_PER_CYCLE*self.NUM_CYCLES]
 
         M = len(self.eom_nps) # number of modes
 
-        x0 = 0 # TODO
+        x0 = np.array(self.ICs)
 
         self.var_strs_updated = []
         if self.use_complex == False:
@@ -197,11 +212,19 @@ class Sim():
             except TypeError:
                 self.param_dict_nosweep[param] = self.param_dict[param]
 
+        if np.shape(self.excitation_freq) != ():
+            L = len(self.excitation_freq)
+            self.excitation_freq_no_sweep = self.excitation_freq[L//2]
+        else:
+            self.excitation_freq_no_sweep = self.excitation_freq
+
     def solve(self):
 
         self.validate()
 
-        I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel_op, self.D_FACTOR, self.d_omega, self.S)
+        ICs = cp.array(self.ICs)
+
+        I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel_op, self.D_FACTOR, self.d_omega, self.S, ICs)
 
         return I_demod, Q_demod, t_d
 
