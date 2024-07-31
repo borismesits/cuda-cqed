@@ -19,7 +19,7 @@ SimpleSim.add_paramsweep('Ap', 0, 250000, 2)
 SimpleSim.add_paramsweep('phi', 0, 2*pi, 101)
 
 SimpleSim.add_EOM('bin', '-1j*10**logAs*omega_d1*exp(-1j*(omega_d1*t + phi)) + -1j*omega_p*Ap*exp(-1j*omega_p*t)')  # intput output theory
-SimpleSim.add_EOM('a', '-1j*omega_0*a - 1j*g*(2*a*conjugate(a) + a*a + conjugate(a)*conjugate(a)) - 1j*g4*(conjugate(a)*a*a) - (sqrtkappa**2/2)*a - sqrtkappa*bin')
+SimpleSim.add_EOM('a', '-1j*omega_0*a - 1j*g*(a + conjugate(a))**2 - 1j*g4*(conjugate(a)*a*a) - (sqrtkappa**2/2)*a - sqrtkappa*bin')
 SimpleSim.set_solve_type('decimate')
 
 SimpleSim.specify_time(100, 200, d_factor=2)

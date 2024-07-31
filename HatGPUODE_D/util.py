@@ -184,41 +184,60 @@ def generate_kernel(var_strs, exp_strs, param_dict, use_complex=False, print_res
 
     return kernel_input, kernel_output, kernel_body, kernel, shape
 
-def generate_pycode(var_strs, exp_strs, param_dict, use_complex=False):
+def generate_pycode(var_strs, exp_strs, param_dict, use_complex=False, print_result=False):
     '''
     ~~Similar to above but for generating python code to run simulations, encoded in the same format, on CPU~~
-    Sympy's printer is not actually that useful here, so all this does is rewrite M complex-valued EOMs as 2M real-valued EOMs
+    Sympy's printer is not actually that useful here, so this rewrites M complex-valued EOMs as 2M real-valued EOMs, then
+    makes a "kernel" - a string that defines a derivative function, which can be called as an exec() statement in the RK loop
     '''
 
     exp_sps = [] # sympy translation
     exp_nps = [] # numpy translation
 
-    for exp_str in exp_strs:
+    numpy_kernel = ''
+    numpy_kernel += 'def numpy_dxdt(t, '
+
+    for var_str in var_strs:
+        if use_complex:
+            numpy_kernel += var_str + '_R, '
+            numpy_kernel += var_str + '_I, '
+        else:
+            numpy_kernel += var_str + ', '
+
+    numpy_kernel = numpy_kernel[:-2]
+
+    numpy_kernel += '): \n'
+
+    symbols = sp.symbols(var_strs)
+
+    symbols_and_parameters_dict = {}
+
+    symbols_and_parameters_dict['t'] = sp.Symbol('t', real=True)  # t is a special variable
+
+    param_dict_keys = list(param_dict.keys())
+
+    for i in range(0, len(param_dict_keys)):
+        parameter = sp.Symbol(param_dict_keys[i], real=True)
+        symbols_and_parameters_dict[param_dict_keys[i]] = parameter
+
+        numpy_kernel += '    ' + param_dict_keys[i] + ' = ' + str(param_dict[param_dict_keys[i]]) + '\n'
+
+    for i in range(0, len(var_strs)):
+        symbol = sp.Symbol(var_strs[i], real=True)
+        symbols_and_parameters_dict[var_strs[i]] = symbols[i]
+
+    for j in range(0,len(exp_strs)):
+
+        exp_str = exp_strs[j]
 
         if use_complex:
-
-            symbols = sp.symbols(var_strs)
-
-            symbols_and_parameters_dict = {}
-
-            symbols_and_parameters_dict['t'] = sp.Symbol('t', real=True) # t is a special variable
-
-            param_dict_keys = list(param_dict.keys())
-
-            for i in range(0, len(param_dict_keys)):
-                parameter = sp.Symbol(param_dict_keys[i], real=True)
-                symbols_and_parameters_dict[param_dict_keys[i]] = parameter
-
-            for i in range(0, len(var_strs)):
-                symbol = sp.Symbol(var_strs[i], real=True)
-                symbols_and_parameters_dict[var_strs[i]] = symbols[i]
 
             exp_sp = sp.sympify(exp_str, locals=symbols_and_parameters_dict)
 
             for i in range(0, len(var_strs)):
 
-                symbol_R = sp.Symbol(var_strs[i] + '_R',real=True)
-                symbol_I = sp.Symbol(var_strs[i] + '_I',real=True)
+                symbol_R = sp.Symbol(var_strs[i] + '_R', real=True)
+                symbol_I = sp.Symbol(var_strs[i] + '_I', real=True)
 
                 exp_sp = exp_sp.subs(symbols[i], symbol_R + 1j*symbol_I)
 
@@ -227,12 +246,13 @@ def generate_pycode(var_strs, exp_strs, param_dict, use_complex=False):
             exp_sps.append(exp_sp_R)
             exp_sps.append(exp_sp_I)
 
-
             exp_np_R = pycode(exp_sp_R, fully_qualified_modules=False)
             exp_np_I = pycode(exp_sp_I, fully_qualified_modules=False)
             exp_nps.append(exp_np_R)
             exp_nps.append(exp_np_I)
 
+            numpy_kernel += '    d' + var_strs[j] + '_Rdt = ' + exp_np_R + ' \n'
+            numpy_kernel += '    d' + var_strs[j] + '_Idt = ' + exp_np_I + ' \n'
 
         else:
             exp_sp = sp.sympify(exp_str)
@@ -241,4 +261,20 @@ def generate_pycode(var_strs, exp_strs, param_dict, use_complex=False):
             exp_np = pycode(exp_sp, fully_qualified_modules=False)
             exp_nps.append(exp_np)
 
-    return exp_nps
+            numpy_kernel += '    d' + var_strs[i] + 'dt = ' + exp_np + ' \n'
+
+    numpy_kernel += '    return '
+
+    for var_str in var_strs:
+        if use_complex:
+            numpy_kernel += 'd' + var_str + '_Rdt, '
+            numpy_kernel += 'd' + var_str + '_Idt, '
+        else:
+            numpy_kernel += 'd' + var_str + 'dt, '
+
+    numpy_kernel = numpy_kernel[:-2]
+
+    if print_result:
+        print(numpy_kernel)
+
+    return exp_nps, numpy_kernel

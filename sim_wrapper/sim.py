@@ -4,9 +4,11 @@ import cupy as cp
 from HatGPUODE_D.util import generate_kernel, generate_pycode
 from HatGPUODE_D.RK_solver_decimate import GPUODE_decimate
 from HatGPUODE_D.RK_solver_CPU import RK_loop_CPU
+from HatGPUODE_D.RK_solver_CPU_old import RK_loop_CPU_old
 import matplotlib
 import time
 import warnings
+from numpy import *
 
 class Sim():
     '''
@@ -21,6 +23,7 @@ class Sim():
     def __init__(self, use_complex=False):
 
         self.param_dict = {}
+        self.param_dict_nosweep = {}
         self.paramsweep_dict = {}
         self.solve_type = ''
         self.var_strs = []
@@ -61,6 +64,9 @@ class Sim():
 
         if is_excitation:
             self.excitation_freq = value
+            self.excitation_freq_nosweep = self.excitation_freq  # just for quick trace
+
+        self.param_dict_nosweep[name] = value
 
     def add_paramsweep(self, name, value_i, value_f, pts, is_excitation=False):
 
@@ -74,8 +80,11 @@ class Sim():
         the array of values in an numpy array.
         '''
 
+        self.param_dict_nosweep[name] = np.linspace(value_i, value_f, pts)[pts//2]
+
         if is_excitation:
             self.excitation_freq = np.linspace(value_i, value_f, pts)
+            self.excitation_freq_nosweep = np.linspace(value_i, value_f, pts)[pts // 2] # just for quick trace
 
     def set_solve_type(self, type_str):
         '''
@@ -159,11 +168,14 @@ class Sim():
             self.kernel_op = kernel_op
             self.shape = shape
 
-            self.eom_nps = generate_pycode(self.var_strs, self.eom_strs, self.param_dict, use_complex=self.use_complex)
+            self.eom_nps, self.numpy_kernel_string = generate_pycode(self.var_strs, self.eom_strs, self.param_dict_nosweep, use_complex=self.use_complex, print_result=print_result)
+
+            ldict = locals()
+            exec(self.numpy_kernel_string, globals(), ldict)
+            numpy_dxdt = ldict['numpy_dxdt']
+            self.numpy_kernel = numpy_dxdt
 
             self.initialize_time()
-
-            self.make_quicktrace_param_dict()
 
             print('Simulation validation success!')
 
@@ -177,8 +189,9 @@ class Sim():
         just a single variation.
         '''
 
+        self.validate(print_result=True)
 
-        dt = 2*np.pi/(self.excitation_freq_no_sweep*self.PTS_PER_CYCLE)
+        dt = 2*np.pi/(self.excitation_freq_nosweep * self.PTS_PER_CYCLE)
 
         t = np.linspace(0, dt*self.PTS_PER_CYCLE*self.NUM_CYCLES, self.PTS_PER_CYCLE*self.NUM_CYCLES+1)[0:self.PTS_PER_CYCLE*self.NUM_CYCLES]
 
@@ -195,28 +208,28 @@ class Sim():
                 self.var_strs_updated.append(var_str + '_R')
                 self.var_strs_updated.append(var_str + '_I')
 
-        x = RK_loop_CPU(M, x0, t, self.var_strs_updated, self.eom_nps, self.param_dict_nosweep)
+        x = RK_loop_CPU(M, x0, t, self.numpy_kernel)
 
         return x, t
 
-    def make_quicktrace_param_dict(self):
-
-        '''Quick solve doesn't so sweeps, so this function just picks the middle value from a sweep as a default'''
-
-        self.param_dict_nosweep = {}
-
-        for param in self.param_dict:
-            try:
-                L = len(self.param_dict[param])
-                self.param_dict_nosweep[param] = self.param_dict[param][L//2]
-            except TypeError:
-                self.param_dict_nosweep[param] = self.param_dict[param]
-
-        if np.shape(self.excitation_freq) != ():
-            L = len(self.excitation_freq)
-            self.excitation_freq_no_sweep = self.excitation_freq[L//2]
-        else:
-            self.excitation_freq_no_sweep = self.excitation_freq
+    # def make_quicktrace_param_dict(self):
+    #
+    #     '''Quick solve doesn't solve sweeps, so this function just picks the middle value from a sweep as a default'''
+    #
+    #     self.param_dict_nosweep = {}
+    #
+    #     for param in self.param_dict:
+    #         try:
+    #             L = len(self.param_dict[param])
+    #             self.param_dict_nosweep[param] = self.param_dict[param][L//2]
+    #         except TypeError:
+    #             self.param_dict_nosweep[param] = self.param_dict[param]
+    #
+    #     if np.shape(self.excitation_freq) != ():
+    #         L = len(self.excitation_freq)
+    #         self.excitation_freq_nosweep = self.excitation_freq[L // 2]
+    #     else:
+    #         self.excitation_freq_nosweep = self.excitation_freq
 
     def solve(self):
 

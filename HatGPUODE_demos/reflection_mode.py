@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Qt5Agg')
+from numpy import * # we have to do a star import here to use eval() on arbitary equations of motion provided by user
 
 pi = np.pi
 
@@ -21,15 +22,18 @@ SimpleSim.specify_time(40, 200, d_factor=1)
 
 SimpleSim.validate()
 
-# x, t = SimpleSim.quick_trace()
-#
-# plt.figure(1)
-# plt.plot(t,x[2,:])
-#
-# plt.figure(2)
-# fftx = np.fft.fft(x[2, :])
-# freqs = np.linspace(0, len(t)/t[-1], len(t))
-# plt.loglog(freqs, np.abs(fftx).transpose())
+exec(SimpleSim.numpy_kernel_string)
+SimpleSim.numpy_kernel = asdf
+
+x, t = SimpleSim.quick_trace()
+
+plt.figure(1)
+plt.plot(t,x[2,:])
+
+plt.figure(2)
+fftx = np.fft.fft(x[2, :])
+freqs = np.linspace(0, len(t)/t[-1], len(t))
+plt.loglog(freqs, np.abs(fftx).transpose())
 
 I, Q, t = SimpleSim.solve()
 
