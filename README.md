@@ -13,3 +13,4 @@ This Github repo has tools that can translate familiar equations of motion into 
 - ~~arbitrary number of sweeps/automatic reshaping~~
 - ~~decimation~~
 - save to plottr file for artibrary slicing with GUI
+- add statistics for sweeps, like number of derivatives calculated
