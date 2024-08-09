@@ -36,7 +36,7 @@ fftx = np.fft.fft(x[2, :])
 freqs = np.linspace(0, len(t)/t[-1], len(t))
 plt.loglog(freqs, np.abs(fftx).transpose())
 
-I, Q, t = SimpleSim.solve()
+I, Q, t = SimpleSim.solve(save_numpy=True)
 
 ain_I = I[0,:,:,:]
 ain_Q = Q[0,:,:,:]

@@ -182,14 +182,14 @@ class Sim():
         except RuntimeError:
             warnings.warn("Kernel generation failed.", RuntimeWarning)
 
-    def quick_trace(self):
+    def quick_trace(self,print_kernel=False):
         '''
         The tricky thing about GPU accleration is, it's almost never faster for just one or a few parallel sims. The
         advantage comes with massive parallelization. Thus, this function runs a CPU simulation, saving all data, for
         just a single variation.
         '''
 
-        self.validate(print_result=True)
+        self.validate(print_result=print_kernel)
 
         dt = 2*np.pi/(self.excitation_freq_nosweep * self.PTS_PER_CYCLE)
 
@@ -231,13 +231,13 @@ class Sim():
     #     else:
     #         self.excitation_freq_nosweep = self.excitation_freq
 
-    def solve(self):
+    def solve(self, save_numpy=False):
 
         self.validate()
 
         ICs = cp.array(self.ICs)
 
-        I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel_op, self.D_FACTOR, self.d_omega, self.S, ICs)
+        I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel_op, self.D_FACTOR, self.d_omega, self.S, ICs, save_numpy=save_numpy)
 
         return I_demod, Q_demod, t_d
 

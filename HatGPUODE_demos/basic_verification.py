@@ -27,7 +27,7 @@ omega_0 = SimpleSim.param_dict_nosweep['omega_0']
 
 plt.figure(1)
 plt.plot(t,x[0,:])
-plt.plot(t, np.exp(-kappa*t)*np.cos(omega_0*t)) # analytical solution, im very good at math I swear :)
+plt.plot(t, np.exp(-kappa*t)*np.cos(omega_0*t)) # analytical solution, im very good at math I swear
 # plt.plot(t,x[1,:])
 
 

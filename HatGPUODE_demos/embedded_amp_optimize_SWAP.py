@@ -8,7 +8,7 @@ pi = np.pi
 
 SimpleSim = Sim(use_complex=True)
 
-SimpleSim.add_param('wa', 5.9e9*2*pi, is_excitation=True)
+SimpleSim.add_param('wa', 6.0e9*2*pi, is_excitation=True)
 SimpleSim.add_param('wb', 4.0e9*2*pi)
 SimpleSim.add_param('wc', 7.5e9*2*pi)
 SimpleSim.add_paramsweep('logchi', 5, 9, 40)
@@ -25,8 +25,8 @@ SimpleSim.add_param('amplR',  0.8)  # 0 - readout drive
 SimpleSim.add_paramsweep('amplC1', 0, 2, 51)  # 6 - c1
 SimpleSim.add_param('amplG', 0.0)  # 18 - gain
 SimpleSim.add_param('amplC2', 0.0)  # 12 - c2
-SimpleSim.add_param('wR', 5.90e9 * 2 * np.pi)  # 1
-SimpleSim.add_param('wC1', -1.9e9 * 2 * np.pi)  # 7
+SimpleSim.add_param('wR', 6.0e9 * 2 * np.pi)  # 1
+SimpleSim.add_param('wC1', -2.0e9 * 2 * np.pi)  # 7
 SimpleSim.add_param('wG', 8.0e9 * 2 * np.pi)  # 19
 SimpleSim.add_param('wC2', 3.5e9 * 2 * np.pi)  # 13
 SimpleSim.add_param('rampR', 1e-9)  # 2
@@ -60,13 +60,9 @@ SimpleSim.add_EOM('b', '-1j*wb*b - 1j*gab*a*s0 - 1j*gbc*c*conjugate(s0) - 1j*g3*
 SimpleSim.add_EOM('c', '-1j*wc*c - 1j*gbc*b*s0 - kc*c')
 SimpleSim.set_solve_type('decimate')
 
-SimpleSim.specify_time(20, 500, d_factor=1)
-
+SimpleSim.specify_time(20, 450, d_factor=3)
 
 SimpleSim.validate()
-
-SimpleSim.param_dict_nosweep['logchi'] = 5
-SimpleSim.param_dict_nosweep['logka'] = 10
 
 x, t = SimpleSim.quick_trace()
 
@@ -83,24 +79,27 @@ fftx = np.fft.fft(x[4, :])
 freqs = np.linspace(0, len(t)/t[-1], len(t))
 plt.loglog(freqs, np.abs(fftx).transpose())
 
-# I, Q, t = SimpleSim.solve()
-#
-# a_nbar = np.sqrt(I[4,:]**2+Q[4,:]**2)
-# b_nbar = np.sqrt(I[6,:]**2+Q[6,:]**2)
-# c_nbar = np.sqrt(I[8,:]**2+Q[8,:]**2)
-#
-# a_separation = np.sqrt((I[4,:,:,1,:]-I[4,:,:,0,:])**2 + (Q[4,:,:,1,:]-Q[4,:,:,0,:])**2)
-# b_separation = np.sqrt((I[6,:,:,1,:]-I[6,:,:,0,:])**2 + (Q[6,:,:,1,:]-Q[6,:,:,0,:])**2)
-# # c_separation = np.sqrt((I[8,:,1,:]-I[8,:,0,:])**2 + (Q[8,:,1,:]-Q[8,:,0,:])**2)
-#
-# logchi = SimpleSim.paramsweep_dict['logchi'] - np.log10(2*pi)
-# logka = SimpleSim.paramsweep_dict['logka'] - np.log10(2*pi)
-#
-# plt.figure(4)
-# plt.pcolor(np.log10(a_nbar[10,10,0,:, :]+a_nbar[10,10,1,:, :]), vmin=-3, vmax=2)
-# plt.colorbar()
-#
-# plt.figure(4)
-# plt.plot(np.log10(a_nbar[10,10,0,:, -1]+a_nbar[10,10,1,:, -1]))
-#
-#
+I, Q, t = SimpleSim.solve()
+
+a_nbar = np.sqrt(I[4,:]**2+Q[4,:]**2)
+b_nbar = np.sqrt(I[6,:]**2+Q[6,:]**2)
+c_nbar = np.sqrt(I[8,:]**2+Q[8,:]**2)
+
+a_separation = np.sqrt((I[4,:,:,1,:]-I[4,:,:,0,:])**2 + (Q[4,:,:,1,:]-Q[4,:,:,0,:])**2)
+b_separation = np.sqrt((I[6,:,:,1,:]-I[6,:,:,0,:])**2 + (Q[6,:,:,1,:]-Q[6,:,:,0,:])**2)
+# c_separation = np.sqrt((I[8,:,1,:]-I[8,:,0,:])**2 + (Q[8,:,1,:]-Q[8,:,0,:])**2)
+
+logchi = SimpleSim.paramsweep_dict['logchi'] - np.log10(2*pi)
+logka = SimpleSim.paramsweep_dict['logka'] - np.log10(2*pi)
+
+plt.figure(4)
+plt.plot(a_nbar[10,10,0,10, :]+a_nbar[10,10,1,10, :],'o-')
+
+plt.figure(5)
+plt.plot(b_nbar[10,10,0,10, :]+b_nbar[10,10,1,10, :],'o-')
+
+
+# plt.figure(5)
+# plt.plot(np.log10(b_nbar[10,10,0,:, -1]+b_nbar[10,10,1,:, -1]))
+
+

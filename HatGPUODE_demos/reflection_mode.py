@@ -22,9 +22,6 @@ SimpleSim.specify_time(40, 200, d_factor=1)
 
 SimpleSim.validate()
 
-exec(SimpleSim.numpy_kernel_string)
-SimpleSim.numpy_kernel = asdf
-
 x, t = SimpleSim.quick_trace()
 
 plt.figure(1)
@@ -35,7 +32,7 @@ fftx = np.fft.fft(x[2, :])
 freqs = np.linspace(0, len(t)/t[-1], len(t))
 plt.loglog(freqs, np.abs(fftx).transpose())
 
-I, Q, t = SimpleSim.solve()
+I, Q, t = SimpleSim.solve(save_numpy=True)
 
 bin_I = I[0,:,:]
 bin_Q = Q[0,:,:]

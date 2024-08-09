@@ -51,6 +51,8 @@ def generate_kernel(var_strs, exp_strs, param_dict, use_complex=False, print_res
 
     for exp_str in exp_strs:
 
+        param_dict_keys = list(param_dict.keys())
+
         if use_complex:
             '''
             Sympy has a very convenient function called sympify, but it has tricky requirements. So I need to 
@@ -65,8 +67,6 @@ def generate_kernel(var_strs, exp_strs, param_dict, use_complex=False, print_res
             symbols_and_parameters_dict['t'] = sp.Symbol('t', real=True) # t is a special variable
 
             parameters = []
-
-            param_dict_keys = list(param_dict.keys())
 
             for i in range(0, len(param_dict_keys)):
                 parameter = sp.Symbol(param_dict_keys[i], real=True)
@@ -261,7 +261,7 @@ def generate_pycode(var_strs, exp_strs, param_dict, use_complex=False, print_res
             exp_np = pycode(exp_sp, fully_qualified_modules=False)
             exp_nps.append(exp_np)
 
-            numpy_kernel += '    d' + var_strs[i] + 'dt = ' + exp_np + ' \n'
+            numpy_kernel += '    d' + var_strs[j] + 'dt = ' + exp_np + ' \n'
 
     numpy_kernel += '    return '
 

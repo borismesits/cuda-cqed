@@ -27,9 +27,7 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
     t_d = cp.zeros([M, S // d_factor])
 
     for i in tqdm(range(0, S), colour="BLUE"):
-        '''
-        The first five lines implement the RK4 method
-        '''
+
 
         if i % d_factor == 0:
 
@@ -42,6 +40,10 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
 
         ti = dt*i
 
+        '''
+        These lines implement the RK4 method
+        '''
+
         k1 = f_dxdt(x, ti, dt, kernel_op, idxs)
         k2 = f_dxdt(x + k1 * dt / 2, ti + dt / 2, dt, kernel_op, idxs)
         k3 = f_dxdt(x + k2 * dt / 2, ti + dt / 2, dt, kernel_op, idxs)
@@ -53,10 +55,60 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
         integrated_Q += x * cp.sin(d_omega * ti) / d_factor
 
 
+    print(' ')
+    print('...finished GPU solve!')
 
-    # I_demod = I_demod[:, :, 1:]
-    # Q_demod = Q_demod[:, :, 1:]
-    # t_d = t_d[:, 1:]
+    return I_demod, Q_demod, t_d
+
+
+def RK_loop_decimate_numpysave(x, dt, kernel_op, idxs, d_factor, d_omega, S):
+    '''
+    Implements a GPU-accelerated RK4 method for simulating systems of ODEs, with built-in decimation of the
+    data to reduce amount of saved information.
+
+    N represents number of modes, M is number of variations (defined outside this function)
+
+    Similar to the RK_loop function of the non-decimated HatGPUODE directory
+
+    '''
+
+    print('Running GPU solve...')
+
+    N, M = np.shape(cp.asnumpy(x))
+
+    integrated_I = x * 0
+    integrated_Q = x * 0
+
+    I_demod = np.zeros([N, M, S // d_factor])
+    Q_demod = np.zeros([N, M, S // d_factor])
+
+    t_d = np.zeros([M, S // d_factor])
+
+    for i in tqdm(range(0, S), colour="BLUE"):
+
+        if i % d_factor == 0:
+            I_demod[:, :, i // d_factor] = 2 * cp.asnumpy(integrated_I)  # factor of two comes from the 2 in cos(x)^2 = 1/2 + cos(2x)/2
+            Q_demod[:, :, i // d_factor] = 2 * cp.asnumpy(integrated_Q)
+            t_d[:, i // d_factor] = cp.asnumpy(dt * i)
+
+            integrated_I = x * 0
+            integrated_Q = x * 0
+
+        ti = dt * i
+
+        '''
+        These lines implement the RK4 method
+        '''
+
+        k1 = f_dxdt(x, ti, dt, kernel_op, idxs)
+        k2 = f_dxdt(x + k1 * dt / 2, ti + dt / 2, dt, kernel_op, idxs)
+        k3 = f_dxdt(x + k2 * dt / 2, ti + dt / 2, dt, kernel_op, idxs)
+        k4 = f_dxdt(x + k3 * dt, ti + dt, dt, kernel_op, idxs)
+
+        x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+        integrated_I += x * cp.cos(d_omega * ti) / d_factor
+        integrated_Q += x * cp.sin(d_omega * ti) / d_factor
 
     print(' ')
     print('...finished GPU solve!')
@@ -80,7 +132,7 @@ def f_dxdt(xi, t, dt, kernel_op, idxs):
     return cp.array(dxdt)
 
 
-def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs):
+def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs, save_numpy=False):
     '''
     Wrapper for the RK loop that creates all the necessary arrays, since
     you can't create arrays inside a jit function.
@@ -113,10 +165,23 @@ def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs):
     d_omega = cp.array(d_omega.flatten(), dtype=cp.float64) # convert digitization-related arrays to cupy
     dt = cp.array(dt.flatten(), dtype=cp.float64)
 
-    I_demod, Q_demod, t_d = RK_loop_decimate(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S)
+    if save_numpy:
+        I_demod, Q_demod, t_d = RK_loop_decimate_numpysave(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S)
 
-    I_demod = np.reshape(cp.asnumpy(I_demod), (*shape, S//d_factor))
-    Q_demod = np.reshape(cp.asnumpy(Q_demod), (*shape, S//d_factor))
-    t_d = np.reshape(cp.asnumpy(t_d), (*shape[1:], S//d_factor))
+        I_demod_np = np.reshape(I_demod, (*shape, S // d_factor))
+        Q_demod_np = np.reshape(Q_demod, (*shape, S // d_factor))
+        t_d_np = np.reshape(t_d, (*shape[1:], S // d_factor))
 
-    return I_demod, Q_demod, t_d
+    else:
+        I_demod, Q_demod, t_d = RK_loop_decimate(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S)
+
+        I_demod_np = np.reshape(cp.asnumpy(I_demod), (*shape, S//d_factor))
+        Q_demod_np = np.reshape(cp.asnumpy(Q_demod), (*shape, S//d_factor))
+        t_d_np = np.reshape(cp.asnumpy(t_d), (*shape[1:], S//d_factor))
+
+        del (I_demod) # free up GPU memory
+        del (Q_demod)
+        del (t_d)
+        cp._default_memory_pool.free_all_blocks()
+
+    return I_demod_np, Q_demod_np, t_d_np
