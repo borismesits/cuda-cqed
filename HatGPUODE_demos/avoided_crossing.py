@@ -36,13 +36,13 @@ fftx = np.fft.fft(x[2, :])
 freqs = np.linspace(0, len(t)/t[-1], len(t))
 plt.loglog(freqs, np.abs(fftx).transpose())
 
-I, Q, t = SimpleSim.solve(save_numpy=True)
+I, Q, t = SimpleSim.solve(only_final=True)
 
-ain_I = I[0,:,:,:]
-ain_Q = Q[0,:,:,:]
+ain_I = I[0,:,:]
+ain_Q = Q[0,:,:]
 
-a_I = I[2,:,:,:]
-a_Q = Q[2,:,:,:]
+a_I = I[2,:,:]
+a_Q = Q[2,:,:]
 
 sqrtkappa_a = SimpleSim.param_dict_nosweep['sqrtkappa_a']
 
@@ -52,7 +52,7 @@ aout_Q = ain_Q + sqrtkappa_a*a_Q
 phase = np.angle(1j*aout_Q+aout_I)
 
 plt.figure(3)
-plt.pcolor(SimpleSim.paramsweep_dict['omega_b']/(2*pi), SimpleSim.paramsweep_dict['omega_d1']/(2*pi), phase[:,:,-1].transpose())
+plt.pcolor(SimpleSim.paramsweep_dict['omega_b']/(2*pi), SimpleSim.paramsweep_dict['omega_d1']/(2*pi), phase[:,:].transpose())
 
 plt.xlabel('Mode Freq.')
 plt.ylabel('Probe Freq.')

@@ -61,7 +61,7 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
     return I_demod, Q_demod, t_d
 
 
-def RK_loop_decimate_numpysave(x, dt, kernel_op, idxs, d_factor, d_omega, S):
+def RK_loop_decimate_onlyfinal(x, dt, kernel_op, idxs, d_factor, d_omega, S):
     '''
     Implements a GPU-accelerated RK4 method for simulating systems of ODEs, with built-in decimation of the
     data to reduce amount of saved information.
@@ -79,17 +79,17 @@ def RK_loop_decimate_numpysave(x, dt, kernel_op, idxs, d_factor, d_omega, S):
     integrated_I = x * 0
     integrated_Q = x * 0
 
-    I_demod = np.zeros([N, M, S // d_factor])
-    Q_demod = np.zeros([N, M, S // d_factor])
+    I_demod = np.zeros([N, M])
+    Q_demod = np.zeros([N, M])
 
-    t_d = np.zeros([M, S // d_factor])
+    t_d = np.zeros([M])
 
     for i in tqdm(range(0, S), colour="BLUE"):
 
         if i % d_factor == 0:
-            I_demod[:, :, i // d_factor] = 2 * cp.asnumpy(integrated_I)  # factor of two comes from the 2 in cos(x)^2 = 1/2 + cos(2x)/2
-            Q_demod[:, :, i // d_factor] = 2 * cp.asnumpy(integrated_Q)
-            t_d[:, i // d_factor] = cp.asnumpy(dt * i)
+            I_demod = 2 * integrated_I  # factor of two comes from the 2 in cos(x)^2 = 1/2 + cos(2x)/2
+            Q_demod = 2 * integrated_Q
+            t_d = dt * i
 
             integrated_I = x * 0
             integrated_Q = x * 0
@@ -132,13 +132,15 @@ def f_dxdt(xi, t, dt, kernel_op, idxs):
     return cp.array(dxdt)
 
 
-def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs, save_numpy=False):
+def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs, only_final=False):
     '''
     Wrapper for the RK loop that creates all the necessary arrays, since
     you can't create arrays inside a jit function.
 
     N is number of modes
     M is number of variations
+
+    only_final option means to only save the final decimation period. Useful for near-steady state sims
     '''
 
     M = int(np.product(shape[1:]))
@@ -165,12 +167,12 @@ def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs, save_numpy=
     d_omega = cp.array(d_omega.flatten(), dtype=cp.float64) # convert digitization-related arrays to cupy
     dt = cp.array(dt.flatten(), dtype=cp.float64)
 
-    if save_numpy:
-        I_demod, Q_demod, t_d = RK_loop_decimate_numpysave(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S)
+    if only_final:
+        I_demod, Q_demod, t_d = RK_loop_decimate_onlyfinal(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S)
 
-        I_demod_np = np.reshape(I_demod, (*shape, S // d_factor))
-        Q_demod_np = np.reshape(Q_demod, (*shape, S // d_factor))
-        t_d_np = np.reshape(t_d, (*shape[1:], S // d_factor))
+        I_demod_np = np.reshape(cp.asnumpy(I_demod), shape)
+        Q_demod_np = np.reshape(cp.asnumpy(Q_demod), shape)
+        t_d_np = np.reshape(cp.asnumpy(t_d), shape[1:])
 
     else:
         I_demod, Q_demod, t_d = RK_loop_decimate(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S)

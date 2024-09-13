@@ -231,13 +231,13 @@ class Sim():
     #     else:
     #         self.excitation_freq_nosweep = self.excitation_freq
 
-    def solve(self, save_numpy=False):
+    def solve(self, only_final=False):
 
         self.validate()
 
         ICs = cp.array(self.ICs)
 
-        I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel_op, self.D_FACTOR, self.d_omega, self.S, ICs, save_numpy=save_numpy)
+        I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel_op, self.D_FACTOR, self.d_omega, self.S, ICs, only_final=only_final)
 
         return I_demod, Q_demod, t_d
 
