@@ -1,10 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import cupy as cp
-from HatGPUODE_D.util import generate_kernel, generate_pycode
-from HatGPUODE_D.RK_solver_decimate import GPUODE_decimate
-from HatGPUODE_D.RK_solver_CPU import RK_loop_CPU
-from HatGPUODE_D.RK_solver_CPU_old import RK_loop_CPU_old
+from gpu_odes.HatGPUODE_D.util import generate_kernel, generate_pycode
+from gpu_odes.HatGPUODE_D.RK_solver_decimate import GPUODE_decimate
+from gpu_odes.HatGPUODE_D.RK_solver_CPU import RK_loop_CPU
+from gpu_odes.HatGPUODE_D.RK_solver_CPU_old import RK_loop_CPU_old
 import matplotlib
 import time
 import warnings
@@ -93,7 +93,7 @@ class Sim():
         saveall_gpu stores all (undecimated) data on the GPU
         saveall stores all (decimated) data, transferring the data to a specified
         '''
-        TYPES = ['decimate','avg','save_all']
+        TYPES = ['decimate', 'avg', 'save_all']
 
         if np.any(type_str == np.array(TYPES)):
 
@@ -145,7 +145,7 @@ class Sim():
             warnings.warn("No equations of motion defined. Use Sim.add_EOM().", RuntimeWarning)
             return
 
-        if self.excitation_freq == '':
+        if np.any(self.excitation_freq) == '':
             warnings.warn("No excitation variable defined. Decimation will not work. Use isExcitation=True on one of the frequency parameters.", RuntimeWarning)
             return
 

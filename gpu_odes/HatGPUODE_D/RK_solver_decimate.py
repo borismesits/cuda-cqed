@@ -143,7 +143,7 @@ def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs, only_final=
     only_final option means to only save the final decimation period. Useful for near-steady state sims
     '''
 
-    M = int(np.product(shape[1:]))
+    M = int(np.prod(shape[1:]))
     N = shape[0]
 
     x0 = cp.zeros([N, M])
