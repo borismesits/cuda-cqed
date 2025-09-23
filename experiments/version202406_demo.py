@@ -1,4 +1,4 @@
-from sim_wrapper.sim import Sim
+from gpu_odes.sim import Sim
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
