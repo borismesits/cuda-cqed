@@ -1,5 +1,5 @@
 Metadata-Version: 2.1
-Name: gpu_odes
+Name: cuda-cqed
 Version: 0.1
 Summary: A package for parallelizing integration of ODEs on GPUs, where one desires large sweeps of many parameters. Intended for design of superconducting circuits.
 Home-page: 

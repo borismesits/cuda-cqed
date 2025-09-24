@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/gpu_odes.iml" filepath="$PROJECT_DIR$/.idea/gpu_odes.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/cuda-cqed.iml" filepath="$PROJECT_DIR$/.idea/cuda-cqed.iml" />
     </modules>
   </component>
 </project>

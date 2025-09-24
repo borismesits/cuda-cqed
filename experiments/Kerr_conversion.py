@@ -1,4 +1,4 @@
-from gpu_odes.sim import Sim
+from cuda_cqed.sim import Sim
 # import gpu_odes.HatGPUODE_D
 import numpy as np
 import matplotlib.pyplot as plt

@@ -1,8 +1,0 @@
-README.md
-setup.py
-gpu_odes/sim.py
-gpu_odes.egg-info/PKG-INFO
-gpu_odes.egg-info/SOURCES.txt
-gpu_odes.egg-info/dependency_links.txt
-gpu_odes.egg-info/not-zip-safe
-gpu_odes.egg-info/top_level.txt

@@ -1,10 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import cupy as cp
-from gpu_odes.HatGPUODE_D.util import generate_kernel, generate_pycode
-from gpu_odes.HatGPUODE_D.RK_solver_decimate import GPUODE_decimate
-from gpu_odes.HatGPUODE_D.RK_solver_CPU import RK_loop_CPU
-from gpu_odes.HatGPUODE_D.RK_solver_CPU_old import RK_loop_CPU_old
+from cuda_cqed.HatGPUODE_D.util import generate_kernel, generate_pycode
+from cuda_cqed.HatGPUODE_D.RK_solver_decimate import GPUODE_decimate
+from cuda_cqed.HatGPUODE_D.RK_solver_CPU import RK_loop_CPU
+from cuda_cqed.HatGPUODE_D.RK_solver_CPU_old import RK_loop_CPU_old
 import matplotlib
 import time
 import warnings
