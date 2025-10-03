@@ -7,20 +7,21 @@ Not just convenient, but a matter of necessity for certain useful computations, 
 This Github repo has tools that can translate familiar equations of motion into GPU-readable code, along with useful analysis code.
 
 
-### Todos/buglist
+### buglist
 
 - incorrectly declaring variables should be caught, current error is confusing ("not supported in C")
 - ~~arbitrary number of sweeps/automatic reshaping~~
 - ~~decimation~~
-- incorrect order of incidices on multi-parameter sweeps
+- incorrect order of indices on multi-parameter sweeps
 
 
 ## Near-term list
 - save to plottr file for artibrary slicing with GUI
 - add statistics for sweeps, like number of derivatives calculated
 - add constant pulse and chirped pulse
-- add multiple pulses for one input
+- ~~add multiple pulses for one input~~
+- need to handle the first decimated sample always being zero
 
 ## Wishlist
 - generate cumulant EoMs
-- allow sweep of initial conditions
+- ~~allow sweep of initial conditions~~

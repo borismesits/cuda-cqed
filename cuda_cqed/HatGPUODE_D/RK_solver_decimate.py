@@ -28,7 +28,6 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
 
     for i in tqdm(range(0, S), colour="BLUE"):
 
-
         if i % d_factor == 0:
 
             I_demod[:, :, i // d_factor] = 2*integrated_I  # factor of two comes from the 2 in cos(x)^2 = 1/2 + cos(2x)/2
@@ -122,17 +121,14 @@ def f_dxdt(xi, t, dt, kernel_op, idxs):
     '''
 
     args = [dt, t]
-
     args.extend(list(xi))
-
     args.extend(idxs)
-
     dxdt = kernel_op(*args)
 
     return cp.array(dxdt)
 
 
-def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs, only_final=False):
+def GPUODE_decimate(dt, shape, kernel_op, IC_kernel_op, d_factor, d_omega, S, only_final=False):
     '''
     Wrapper for the RK loop that creates all the necessary arrays, since
     you can't create arrays inside a jit function.
@@ -146,12 +142,6 @@ def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs, only_final=
     M = int(np.prod(shape[1:]))
     N = shape[0]
 
-    x0 = cp.zeros([N, M])
-
-    for i in range(0,N):
-
-        x0[i,:] = ICs[i]
-
     idxs = []
 
     for i in range(1, len(shape)):
@@ -163,6 +153,9 @@ def GPUODE_decimate(dt, shape, kernel_op, d_factor, d_omega, S, ICs, only_final=
 
     for i in range(0, len(shape)-1):
         IDXSCP.append(cp.array(cp.array(IDXS[i].flatten(), dtype=np.int32)))
+
+    ICs = IC_kernel_op(*IDXSCP)
+    x0 = cp.array(ICs)
 
     d_omega = cp.array(d_omega.flatten(), dtype=cp.float64) # convert digitization-related arrays to cupy
     dt = cp.array(dt.flatten(), dtype=cp.float64)

@@ -156,21 +156,29 @@ class Sim():
 
         try:
 
-            kernel_input, kernel_output, kernel_body, kernel_op, shape = generate_kernel(self.var_strs, self.eom_strs, self.IC_strs,
+            kernel_string, IC_kernel_string, kernel, IC_kernel, shape = generate_kernel(self.var_strs, self.eom_strs, self.IC_strs,
                                                                                                    self.param_dict,
                                                                                                    use_complex=self.use_complex, print_result=print_result)
-            self.kernel_input = kernel_input
-            self.kernel_output = kernel_output
-            self.kernel_body = kernel_body
-            self.kernel_op = kernel_op
+            self.kernel_string = kernel_string
+            self.IC_kernel_string = IC_kernel_string
+            self.kernel = kernel
+            self.IC_kernel = IC_kernel
             self.shape = shape
 
-            self.eom_nps, self.numpy_kernel_string = generate_pycode(self.var_strs, self.eom_strs, self.param_dict_nosweep, use_complex=self.use_complex, print_result=print_result)
+            eom_nps, numpy_kernel_string, numpy_IC_kernel_string = generate_pycode(self.var_strs, self.eom_strs, self.IC_strs,  self.param_dict_nosweep, use_complex=self.use_complex, print_result=print_result)
+
+            self.eom_nps = eom_nps
+            self.numpy_kernel_string = numpy_kernel_string
+            self.numpy_IC_kernel_string = numpy_IC_kernel_string
 
             ldict = locals()
             exec(self.numpy_kernel_string, globals(), ldict)
             numpy_dxdt = ldict['numpy_dxdt']
             self.numpy_kernel = numpy_dxdt
+
+            exec(self.numpy_IC_kernel_string, globals(), ldict)
+            numpy_get_ICs = ldict['numpy_get_ICs']
+            self.numpy_get_ICs = numpy_get_ICs
 
             self.initialize_time()
 
@@ -187,14 +195,9 @@ class Sim():
         '''
 
         self.validate(print_result=print_kernel)
-
         dt = 2*np.pi/(self.excitation_freq_nosweep * self.PTS_PER_CYCLE)
-
         t = np.linspace(0, dt*self.PTS_PER_CYCLE*self.NUM_CYCLES, self.PTS_PER_CYCLE*self.NUM_CYCLES+1)[0:self.PTS_PER_CYCLE*self.NUM_CYCLES]
-
         M = len(self.eom_nps) # number of modes
-
-        x0 = np.array(self.ICs)
 
         self.var_strs_updated = []
         if self.use_complex == False:
@@ -205,7 +208,7 @@ class Sim():
                 self.var_strs_updated.append(var_str + '_R')
                 self.var_strs_updated.append(var_str + '_I')
 
-        x = RK_loop_CPU(M, x0, t, self.numpy_kernel)
+        x = RK_loop_CPU(M, t, self.numpy_kernel, self.numpy_get_ICs)
 
         return x, t
 
@@ -232,9 +235,7 @@ class Sim():
 
         self.validate()
 
-        ICs = cp.array(self.ICs)
-
-        I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel_op, self.D_FACTOR, self.d_omega, self.S, ICs, only_final=only_final)
+        I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel, self.IC_kernel, self.D_FACTOR, self.d_omega, self.S, only_final=only_final)
 
         return I_demod, Q_demod, t_d
 
