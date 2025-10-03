@@ -1,4 +1,4 @@
-from gpu_odes.sim import Sim
+from cuda_cqed.sim import Sim
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
@@ -15,7 +15,7 @@ SimpleSim.add_param('kappa', 1e8*2*pi)
 SimpleSim.add_param('g', 5e9*2*pi)
 SimpleSim.add_paramsweep('logA', 6, 9, 90)
 
-SimpleSim.add_EOM('a', '-1j*omega_0*a -1j*g*(a)**3 + 10**(logA)*cos(omega_d*t) - kappa*a')
+SimpleSim.add_EOM('a', '-1j*omega_0*a -1j*g*(a)**3 + 10**(logA)*cos(omega_d*t) - kappa*a', IC=0)
 SimpleSim.set_solve_type('decimate')
 
 SimpleSim.use_complex = True
