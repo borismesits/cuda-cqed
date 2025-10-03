@@ -19,6 +19,7 @@ This Github repo has tools that can translate familiar equations of motion into 
 - save to plottr file for artibrary slicing with GUI
 - add statistics for sweeps, like number of derivatives calculated
 - add constant pulse and chirped pulse
+- add multiple pulses for one input
 
 ## Wishlist
 - generate cumulant EoMs
