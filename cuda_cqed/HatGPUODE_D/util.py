@@ -31,7 +31,7 @@ def convert_power_arg_to_float64(inputt):
     return string
 
 
-def generate_kernel(var_strs, exp_strs, param_dict, use_complex=False, print_result=False):
+def generate_kernel(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, print_result=False):
     '''
 
     :param var_strs: The list of strings containing the names of quadratures (indep. variables in ODEs)

@@ -28,7 +28,7 @@ class Sim():
         self.solve_type = ''
         self.var_strs = []
         self.eom_strs = []
-        self.ICs = []
+        self.IC_strs = []
         self.use_complex = use_complex  # are the dependent variables complex (like Langevin equation) or real (like classical)?
         self.excitation_freq = '' # the name of a special variable that represents a drive or pump frequency. Determines decimation parameters. Only one variable can be this
         self.PTS_PER_CYCLE = None
@@ -39,7 +39,15 @@ class Sim():
         return str(A) + '*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(start) + ')/' + str(
             ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + '))'
 
-    def add_EOM(self, var_str, eom_str, IC=0):
+    def make_pulse_sequence(self, pulses):
+
+        pulse_sequence = ''
+        for pulse in pulses:
+            pulse_sequence += pulse + ' + '
+
+        return pulse_sequence[0:-3]
+
+    def add_EOM(self, var_str, eom_str, IC_str='0'):
         '''
         In order for the solver to parse our description of some set of equations, we need to specify the following.
         You can also add parameters in a later step.
@@ -50,12 +58,7 @@ class Sim():
 
         self.var_strs.append(var_str)
         self.eom_strs.append(eom_str)
-
-        if self.use_complex:
-            self.ICs.append(np.real(IC))
-            self.ICs.append(np.imag(IC))
-        else:
-            self.ICs.append(IC)
+        self.IC_strs.append(IC_str)
 
     def add_param(self, name, value, is_excitation=False):
 
@@ -121,19 +124,13 @@ class Sim():
     def initialize_time(self):
 
         if self.solve_type == 'decimate':
-
             self.D_FACTOR = self.PTS_PER_CYCLE*self.d_factor_mult  # decimation factor
 
             # below is the decimation frequency
-
             excitation_freq = self.excitation_freq
-
             self.d_omega = np.ones(self.shape[1:]) * excitation_freq
-
             d_omega_dt = np.ones(self.shape[1:]) * excitation_freq  # this is here in case you want to turn demod freq to 0, which would otherwise create infinitely long timesteps
-
             self.dt = (2 * np.pi) / (d_omega_dt * self.PTS_PER_CYCLE)
-
             self.S = self.PTS_PER_CYCLE * self.NUM_CYCLES
 
         else:
@@ -159,7 +156,7 @@ class Sim():
 
         try:
 
-            kernel_input, kernel_output, kernel_body, kernel_op, shape = generate_kernel(self.var_strs, self.eom_strs,
+            kernel_input, kernel_output, kernel_body, kernel_op, shape = generate_kernel(self.var_strs, self.eom_strs, self.IC_strs,
                                                                                                    self.param_dict,
                                                                                                    use_complex=self.use_complex, print_result=print_result)
             self.kernel_input = kernel_input
