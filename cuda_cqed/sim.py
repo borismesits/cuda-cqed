@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import cupy as cp
 from cuda_cqed.HatGPUODE_D.util import generate_kernel, generate_pycode
 from cuda_cqed.HatGPUODE_D.RK_solver_decimate import GPUODE_decimate
+from cuda_cqed.HatGPUODE.RK_solver import GPUODE
 from cuda_cqed.HatGPUODE_D.RK_solver_CPU import RK_loop_CPU
 from cuda_cqed.HatGPUODE_D.RK_solver_CPU_old import RK_loop_CPU_old
 import matplotlib
@@ -33,10 +34,11 @@ class Sim():
         self.excitation_freq = '' # the name of a special variable that represents a drive or pump frequency. Determines decimation parameters. Only one variable can be this
         self.PTS_PER_CYCLE = None
         self.NUM_CYCLES = None
+        self.is_time_specified = False
 
     def make_pulse(self, omega, A, phi, start, stop, ramp):
 
-        return str(A) + '*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(start) + ')/' + str(
+        return str(A) + '/2*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(start) + ')/' + str(
             ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + '))'
 
     def make_pulse_sequence(self, pulses):
@@ -96,7 +98,7 @@ class Sim():
         saveall_gpu stores all (undecimated) data on the GPU
         saveall stores all (decimated) data, transferring the data to a specified
         '''
-        TYPES = ['decimate', 'avg', 'save_all']
+        TYPES = ['decimate', 'avg', 'all']
 
         if np.any(type_str == np.array(TYPES)):
 
@@ -106,24 +108,36 @@ class Sim():
             warnings.warn("Specified solve type not found.", RuntimeWarning)
             return
 
-    def specify_time(self, pts_per_cycle, num_cycles, d_factor=1):
+    def specify_time(self, pts=None, t_f=None, pts_per_cycle=None, num_cycles=None, d_factor=None):
         '''
         :param pts_per_cycle: Integration points per cycle, where a cycle is the period of the excitation frequency (see add_param())
         :param num_cycles: How many cycles or periods to run the simulation for
         :param d_factor: By default, the data is decimated over every cycle (not half cycle). You can make the decimation window larger by this factor
         '''
 
+        print('Recent change to specify_time(), check implementation')
+
+        if self.solve_type == None:
+
+            warnings.warn("Specify solve type before specifying time.", RuntimeWarning)
+            return
+
         self.PTS_PER_CYCLE = pts_per_cycle
-
-        if pts_per_cycle < 20:
-            warnings.warn("Points per cycle recommended to be at least 20 for accuracy.", RuntimeWarning)
-
         self.NUM_CYCLES = num_cycles
         self.d_factor_mult = d_factor
+
+        self.S = pts
+        self.t_f = t_f
+
+        self.is_time_specified = True
 
     def initialize_time(self):
 
         if self.solve_type == 'decimate':
+
+            if self.PTS_PER_CYCLE < 20:
+                warnings.warn("Points per cycle recommended to be at least 20 for accuracy.", RuntimeWarning)
+
             self.D_FACTOR = self.PTS_PER_CYCLE*self.d_factor_mult  # decimation factor
 
             # below is the decimation frequency
@@ -132,6 +146,9 @@ class Sim():
             d_omega_dt = np.ones(self.shape[1:]) * excitation_freq  # this is here in case you want to turn demod freq to 0, which would otherwise create infinitely long timesteps
             self.dt = (2 * np.pi) / (d_omega_dt * self.PTS_PER_CYCLE)
             self.S = self.PTS_PER_CYCLE * self.NUM_CYCLES
+
+        elif self.solve_type == 'all':
+            self.dt = self.t_f/self.S
 
         else:
             raise NotImplementedError
@@ -150,7 +167,7 @@ class Sim():
             warnings.warn("No solve type specified. Use Sim.set_solve_type().", RuntimeWarning)
             return
 
-        if self.PTS_PER_CYCLE == None:
+        if self.is_time_specified == False:
             warnings.warn("Time variables not specified. Use Sim.specify_time().", RuntimeWarning)
             return
 
@@ -195,8 +212,14 @@ class Sim():
         '''
 
         self.validate(print_result=print_kernel)
-        dt = 2*np.pi/(self.excitation_freq_nosweep * self.PTS_PER_CYCLE)
-        t = np.linspace(0, dt*self.PTS_PER_CYCLE*self.NUM_CYCLES, self.PTS_PER_CYCLE*self.NUM_CYCLES+1)[0:self.PTS_PER_CYCLE*self.NUM_CYCLES]
+        if self.solve_type == 'decimate':
+            dt = 2*np.pi/(self.excitation_freq_nosweep * self.PTS_PER_CYCLE)
+            t = np.linspace(0, dt * self.PTS_PER_CYCLE * self.NUM_CYCLES, self.PTS_PER_CYCLE * self.NUM_CYCLES + 1)[
+                0:self.PTS_PER_CYCLE * self.NUM_CYCLES]
+        elif self.solve_type == 'all':
+            dt = self.dt
+            t = np.arange(0, self.t_f, self.dt)
+
         M = len(self.eom_nps) # number of modes
 
         self.var_strs_updated = []
@@ -235,9 +258,20 @@ class Sim():
 
         self.validate()
 
-        I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel, self.IC_kernel, self.D_FACTOR, self.d_omega, self.S, only_final=only_final)
+        if self.solve_type == 'decimate':
+            I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel, self.IC_kernel, self.D_FACTOR,
+                                                    self.d_omega, self.S, only_final=only_final)
+            return I_demod, Q_demod, t_d
 
-        return I_demod, Q_demod, t_d
+        elif self.solve_type == 'all':
+            x_demod, t_d = GPUODE(np.array(self.dt), self.shape, self.kernel, self.IC_kernel, self.S)
+            # todo add only_final option for 'all' solve type
+
+            return x_demod, t_d
+        else:
+            raise NotImplementedError
+
+
 
 
 

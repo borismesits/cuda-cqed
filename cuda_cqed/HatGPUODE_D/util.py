@@ -339,18 +339,17 @@ def generate_pycode(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
     for i in range(0, len(var_strs)):
 
         var_str = var_strs[i]
-        IC_str = IC_strs[i]
 
         if use_complex:
             numpy_kernel += 'd' + var_str + '_Rdt, '
             numpy_kernel += 'd' + var_str + '_Idt, '
 
-            numpy_IC_kernel += 'IC_' + var_strs[j] + '_R, '
-            numpy_IC_kernel += 'IC_' + var_strs[j] + '_I, '
+            numpy_IC_kernel += 'IC_' + var_str + '_R, '
+            numpy_IC_kernel += 'IC_' + var_str + '_I, '
 
         else:
             numpy_kernel += 'd' + var_str + 'dt, '
-            numpy_IC_kernel += 'IC_' + var_strs[j] + ', '
+            numpy_IC_kernel += 'IC_' + var_str + ', '
 
 
     numpy_kernel = numpy_kernel[:-2]

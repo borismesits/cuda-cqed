@@ -25,7 +25,7 @@ sim.add_param('phaseR', 0)
 Rpulse = sim.make_pulse('wR', 'amplR', 'phaseR', 'startR', 'stopR', 'rampR')
 
 sim.add_EOM('ain', Rpulse)
-sim.add_EOM('a', '-1j*wa*a - ain*sqrtka_ext - (sqrtka_ext**2 + ka_int)/2*a - 1j*a*g4*abs(a)**2', IC_str='cos(ICphase)')
+sim.add_EOM('a', '-1j*wa*a - ain*sqrtka_ext - (sqrtka_ext**2 + ka_int)/2*a - 1j*a*g4*abs(a)**2', IC_str='exp(1j*ICphase)')
 
 sim.set_solve_type('decimate')
 
@@ -44,4 +44,11 @@ td = t.copy()
 ain = Id[0,:]+1j*Qd[0,:]
 a = Id[2,:]+1j*Qd[2,:]
 
-plt.plot(np.real(a).transpose())
+i = 1
+plt.plot(np.real(a[:,i]), np.imag(a[:,i]))
+
+i = -1
+plt.plot(np.real(a[:,i]), np.imag(a[:,i]))
+plt.grid()
+plt.xlim([-2,2])
+plt.ylim([-2,2])

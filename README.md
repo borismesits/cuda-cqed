@@ -25,3 +25,4 @@ This Github repo has tools that can translate familiar equations of motion into 
 ## Wishlist
 - generate cumulant EoMs
 - ~~allow sweep of initial conditions~~
+- time-delayed equations of motion
