@@ -13,24 +13,12 @@ from matplotlib.widgets import Slider
 import h5py
 from matplotlib.animation import FuncAnimation
 import warnings
+import matplotlib as mpl
+mpl.use('Qt5Agg')
 
 
-def _indexData(data: Union[List, np.array], dim: Union[List, np.array]):
-    """ get the data at dimension 'dim' of the input data. Basically just make
-        the list data can be indexed like np.array data.
-
-    :param data: input data
-    :param dim: list of indexs for each dimension
-    :return:
-    """
-    d = data
-    for i in dim:
-        d = d[int(i)]
-    return d
-
-
-def sliderHist2d(data_I: Union[List, np.array], data_Q: Union[List, np.array],
-                 axes_dict: dict, callback: Callable = None, adaptiveRange=False, logPlot=False, maxVal=None,
+def cumulant_slider_plot(a, aa, na,
+                 axes_dict: dict, plot_range=5, callback: Callable = None, adaptiveRange=False,
                  **hist2dArgs) -> List[Slider]:
     """Create a slider plot widget. The caller needs to maintain a reference to
     the returned Slider objects to keep the widget activate
@@ -46,34 +34,20 @@ def sliderHist2d(data_I: Union[List, np.array], data_Q: Union[List, np.array],
     except AttributeError:
         pass
 
-    hist2dArgs["bins"] = hist2dArgs.get("bins", 101)
-    if maxVal is None:
-        maxVal = np.max(np.abs([flatten_ragged_list(data_I), flatten_ragged_list(data_Q)]))
-    hist2dArgs["range"] = hist2dArgs.get("range", [[-maxVal, maxVal], [-maxVal, maxVal]])
-
     # initial figure
     nAxes = len(axes_dict)
-    dataI0 = _indexData(data_I, np.zeros(nAxes))
-    dataQ0 = _indexData(data_Q, np.zeros(nAxes))
+
     fig = plt.figure(figsize=(7, 7 + nAxes * 0.3))
     callback_text = plt.figtext(0.15, 0.01, "", size="large", figure=fig)
     plt.subplots_adjust(bottom=nAxes * 0.3 / (7 + nAxes * 0.3) + 0.1)
     plt.subplot(1, 1, 1)
-    if adaptiveRange:
-        hist2dArgs.pop("range")
-        histo_range_ = ((min(dataI0), max(dataI0)), (min(dataQ0), max(dataQ0)))
-        hist, x, y = np.histogram2d(dataI0, dataQ0, range=histo_range_, **hist2dArgs)
-    else:
-        hist, x, y = np.histogram2d(dataI0, dataQ0, **hist2dArgs)
-    if logPlot:
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore")
-            plt.pcolor(x, y, np.log(hist))
-    else:
-        plt.pcolor(x, y, hist)
-    ax = plt.gca()
-    ax.set_aspect(1)
-    # generate sliders
+    main_ax = plt.gca()
+    main_ax.set_xlim([-plot_range,plot_range])
+    main_ax.set_ylim([-plot_range, plot_range])
+    main_ax.grid()
+
+    line = plot_Qfunc(a[0,0], aa[0,0], na[0,0], ax=None, line=None)
+
     axcolor = 'lightgoldenrodyellow'
     sld_list = []
     for idx, (k, v) in enumerate(axes_dict.items()):
@@ -85,31 +59,24 @@ def sliderHist2d(data_I: Union[List, np.array], data_Q: Union[List, np.array],
     def update(val):
         sel_dim = []
         ax_val_list = []
+        ax_idx_list = []
         for i in range(nAxes):
             ax_name = sld_list[i].label.get_text()
             ax_idx = int(sld_list[i].val)
             sel_dim.append(int(ax_idx))
             ax_val = np.round(axes_dict[ax_name][ax_idx], 5)
             ax_val_list.append(ax_val)
+            ax_idx_list.append(ax_idx)
             sld_list[i].valtext.set_text(str(ax_val))
-        newI = _indexData(data_I, sel_dim)
-        newQ = _indexData(data_Q, sel_dim)
-        ax.cla()
-        # ax.hist2d(newI, newQ, **hist2dArgs)
-        if adaptiveRange:
-            histo_range_ = ((min(newI), max(newI)), (min(newQ), max(newQ)))
-            hist, x, y = np.histogram2d(newI, newQ, range=histo_range_, bins=hist2dArgs["bins"])
-        else:
-            hist, x, y = np.histogram2d(newI, newQ, **hist2dArgs)
-        if logPlot:
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore")
-                ax.pcolor(x, y, np.log(hist))
-        else:
-            ax.pcolor(x, y, hist)
+        ax_idx_tuple = tuple(ax_idx_list)
+        new_a = a[ax_idx_tuple]
+        new_aa = aa[ax_idx_tuple]
+        new_na = na[ax_idx_tuple]
+
+        line = plot_Qfunc(new_a, new_aa, new_na, ax=main_ax, line=main_ax.lines[0])
         # print callback result on top of figure
         if callback is not None:
-            result = callback(newI, newQ, *ax_val_list)
+            result = callback(new_a, new_aa, new_na, *ax_val_list)
             callback_text.set_text(callback.__name__ + f": {result}")
         fig.canvas.draw_idle()
 
@@ -117,286 +84,142 @@ def sliderHist2d(data_I: Union[List, np.array], data_Q: Union[List, np.array],
         sld_list[i].on_changed(update)
     return sld_list
 
+def plot_Qfunc(a, aa, na, ax=None, line=None):
+    if ax == None:
+        ax = plt.gca()
 
-def sliderPlot(data_x: Union[List, np.ndarray], data_y: Union[List, np.ndarray],
-               axes_dict: dict, callback: Callable = None, titleArray: Union[List[str], np.ndarray] = None,
-               plotArgList: List[Union[Tuple, List]] = None, plotKwargList: List[Dict] = None) -> List[Slider]:
-    """Create a slider line plot widget. The caller needs to maintain a reference to the returned Slider objects
-        to keep the widget activate
+    ad = np.conjugate(a)
+    adad = np.conjugate(aa)
+    sxx = 1 / 2 + 1 / 2 * ((aa - a * a) + 2 * (na - ad * a) + (adad - ad * ad))
+    syy = 1 / 2 - 1 / 2 * ((aa - a * a) - 2 * (na - ad * a) + (adad - ad * ad))
+    sxy = np.imag(1 / 2 * ((aa - a * a) - (adad - ad * ad)))
+    covar = np.real(np.array([[sxx, sxy], [sxy, syy]]))
 
-    :param data_x: x data for line plot, should have the shape of (len(axis0), len(axis1), ..., len(axisN), (nLines), nPts)
-    :param data_y: y data for line plot, should have the shape of (len(axis0), len(axis1), ..., len(axisN), (nLines), nPts)
-    :param axes_dict: a dictionary that contains the data of each axis
-    :param titleArray: title for each plot, should have shape of (len(axis0), len(axis1), ..., len(axisN))
-    :param plotArgList: positional arguments for each line, should have the shape of (len(axis0), len(axis1), ..., len(axisN), nLines).
-                        e.g. [["."], ["."], ["-"]]
-    :param plotArgList: keyword arguments for each line, should have the shape of (len(axis0), len(axis1), ..., len(axisN), nLines).
-                        e.g. [{"label":"data_i"},{"label":"data_q"}, {"label":"fit", "linewidth":3}]
+    phi = np.linspace(0, 2 * np.pi, 101)
 
-    :return: list of Slider objects.
-    """
-    try:  # incase it's a datadict
-        axes_dict.to_dict()
-    except AttributeError:
-        pass
+    order = np.argsort(np.linalg.eig(covar)[0])
+    major_idx = order[1]
+    minor_idx = order[0]
 
-    nAxes = len(axes_dict)
-    axesDim = list(map(len, axes_dict.values()))
-    if titleArray is None:
-        titleArray = np.zeros(axesDim, dtype="str")
+    theta = -np.angle(np.linalg.eig(covar)[1][:, 1][minor_idx] + 1j * np.linalg.eig(covar)[1][:, 1][major_idx])
+    Smajor = np.sort(np.linalg.eig(covar)[0])[major_idx]
+    Sminor = np.sort(np.linalg.eig(covar)[0])[minor_idx]
 
-    dataX0 = _indexData(data_x, np.zeros(nAxes))
-    dataY0 = _indexData(data_y, np.zeros(nAxes))
-    title0 = _indexData(titleArray, np.zeros(nAxes))
+    x1 = (Smajor) ** (1 / 4) * np.cos(phi) * 2
+    y1 = (Sminor) ** (1 / 4) * np.sin(phi) * 2
 
-    # check if there is only one line for each plot. i.e. if the data shape is (len(axis0), ..., len(axisN), (nLines), nPts)
-    # or (len(axis0), ..., len(axisN), nPts)
-    single_line = False
-    try:
-        len(dataX0[0])
-        nLines = len(dataX0)
-    except TypeError:
-        nLines = 1
-        single_line = True
-        dataX0 = [dataX0]
-        dataY0 = [dataY0]
+    x2 = x1 * np.cos(theta) + y1 * np.sin(theta) + np.real(a)
+    y2 = -x1 * np.sin(theta) + y1 * np.cos(theta) + np.imag(a)
 
-    if plotArgList is None:
-        plotArgList = [()] * nLines
-    if plotKwargList is None:
-        plotKwargList = [{}] * nLines
+    if line == None:
+        line = ax.plot(x2, y2)
+    else:
+        line.set_xdata(x2)
+        line.set_ydata(y2)
+        plt.draw()
 
-    # initial figure
-    fig = plt.figure(figsize=(7, 7 + nAxes * 0.3))
-    callback_text = plt.figtext(0.15, 0.01, "", size="large", figure=fig)
-    plt.subplots_adjust(bottom=nAxes * 0.3 / (7 + nAxes * 0.3) + 0.1)
-    plt.subplot(1, 1, 1)
-    plt.title(title0)
-    for i in range(nLines):
-        plt.plot(dataX0[i], dataY0[i], *(plotArgList[i]), **(plotKwargList[i]))
-    plt.legend()
-    ax = plt.gca()
-    # generate sliders
-    axcolor = 'lightgoldenrodyellow'
-    sld_list = []
-    for idx, (k, v) in enumerate(axes_dict.items()):
-        ax_ = plt.axes([0.2, (nAxes - idx) * 0.04, 0.6, 0.03], facecolor=axcolor)
-        sld_ = Slider(ax_, k, 0, len(v) - 1, valinit=0, valstep=1)
-        sld_list.append(sld_)
-
-    # update funtion
-    def update(val):
-        sel_dim = []
-        ax_val_list = []
-        for i in range(nAxes):
-            ax_name = sld_list[i].label.get_text()
-            ax_idx = int(sld_list[i].val)
-            sel_dim.append(int(ax_idx))
-            ax_val = np.round(axes_dict[ax_name][ax_idx], 5)
-            ax_val_list.append(ax_val)
-            sld_list[i].valtext.set_text(str(ax_val))
-
-        newX = _indexData(data_x, sel_dim)
-        newY = _indexData(data_y, sel_dim)
-        newTitle = _indexData(titleArray, sel_dim)
-        if single_line:
-            newX = [newX]
-            newY = [newY]
-        ax.cla()
-        ax.set_title(newTitle)
-        for i in range(nLines):
-            ax.plot(newX[i], newY[i], *(plotArgList[i]), **(plotKwargList[i]))
-        ax.legend()
-        # print callback result on top of figure
-        if callback is not None:
-            result = callback(newX, newY, *ax_val_list)
-            callback_text.set_text(callback.__name__ + f": {result}")
-        fig.canvas.draw_idle()
-
-    for i in range(nAxes):
-        sld_list[i].on_changed(update)
-    return sld_list
+    return line
+    # ax.xlim([-7,7])
+    # ax.ylim([-7,7])
+    # plt.gca().set_aspect('equal')
+    # plt.grid()
+    # plt.show()
 
 
-def sliderPColorMesh(xdata, ydata, zdata,
-                     axes_dict: dict, callback: Callable = None, **pColorMeshArgs):
-    try:  # incase it's a datadict
-        axes_dict.to_dict()
-    except AttributeError:
-        pass
-
-    # raise NotImplementedError("this function is still under developing")
-    pColorMeshArgs["shading"] = pColorMeshArgs.get("shading", "auto")
-    pColorMeshArgs["vmin"] = pColorMeshArgs.get("vmin", np.min(zdata))
-    pColorMeshArgs["vmax"] = pColorMeshArgs.get("vmax", np.max(zdata))
-    # initial figure
-    nAxes = len(axes_dict)
-    zdata0 = _indexData(zdata, np.zeros(nAxes))
-    fig = plt.figure(figsize=(7, 7 + nAxes * 0.3))
-
-    callback_text = plt.figtext(0.15, 0.01, "", size="large", figure=fig)
-    plt.subplots_adjust(bottom=nAxes * 0.3 / (7 + nAxes * 0.3) + 0.1)
-    plt.subplot(1, 1, 1)
-    pcm = plt.pcolormesh(xdata, ydata, zdata0.T, **pColorMeshArgs)
-    ax1 = plt.gca()
-    fig.colorbar(pcm, ax=ax1)
-    axcolor = 'lightgoldenrodyellow'
-
-    # generate sliders
-    sld_list = []
-    for idx, (k, v) in enumerate(axes_dict.items()):
-        ax_ = plt.axes([0.15, (nAxes - idx) * 0.04, 0.6, 0.03], facecolor=axcolor)
-        sld_ = Slider(ax_, k, 0, len(v) - 1, valinit=0, valstep=1)
-        sld_list.append(sld_)
-
-    # update funtion
-    def update(val):
-        sel_dim = []
-        ax_val_list = []
-        for i in range(nAxes):
-            ax_name = sld_list[i].label.get_text()
-            ax_idx = int(sld_list[i].val)
-            sel_dim.append(int(ax_idx))
-            ax_val = np.round(axes_dict[ax_name][ax_idx], 5)
-            ax_val_list.append(ax_val)
-            sld_list[i].valtext.set_text(str(ax_val))
-        newZdata = _indexData(zdata, sel_dim)
-        ax1.cla()
-        pcm = ax1.pcolormesh(xdata, ydata, newZdata.T, **pColorMeshArgs)
-        # print callback result on top of figure
-        if callback is not None:
-            result = callback(xdata, ydata, newZdata, *ax_val_list)
-            callback_text.set_text(callback.__name__ + f": {result}")
-        fig.canvas.draw_idle()
-
-    for i in range(nAxes):
-        sld_list[i].on_changed(update)
-
-    return sld_list
-
-
-def sliderBarPlot(data, axes_dict: dict, bar_labels=None, callback: Callable = None, **bar3dArgs):
-    if bar_labels == None:
-        bar_labels = ["ZI", "XI", "YI", "IZ", "IX", "IY", "ZZ", "ZX", "ZY", "XZ", "XX", "XY", "YZ", "YX", "YY"]
-
-    try:  # incase it's a datadict
-        axes_dict.to_dict()
-    except AttributeError:
-        pass
-
-    # initial figure
-    nAxes = len(axes_dict)
-    data0 = _indexData(data, np.zeros(nAxes))
-    fig = plt.figure("barPlot", figsize=(10, 5 + nAxes * 0.3))
-
-    callback_text = plt.figtext(0.15, 0.01, "", size="large", figure=fig)
-    plt.subplots_adjust(bottom=nAxes * 0.3 / (8 + nAxes * 0.3) + 0.1)
-    plt.subplot(1, 1, 1)
-    plt.bar(bar_labels, data0, color='black')
-    ax1 = plt.gca()
-    plt.ylim(-1, 1)
-    # plt.plot((-0.5, 14.5), (0, 0), 'k-')
-    # plt.axvspan(-0.5, 2.5, alpha=0.4, color='red')
-    # plt.axvspan(2.5, 5.5, alpha=0.4, color='blue')
-    # plt.axvspan(5.5, 14.5, alpha=0.4, color='violet')
-
-    axcolor = 'lightgoldenrodyellow'
-
-    # generate sliders
-    sld_list = []
-    for idx, (k, v) in enumerate(axes_dict.items()):
-        ax_ = plt.axes([0.15, (nAxes - idx) * 0.04, 0.7, 0.03], facecolor=axcolor)
-        sld_ = Slider(ax_, k, 0, len(v) - 1, valinit=0, valstep=1)
-        sld_list.append(sld_)
-
-    # update funtion
-    def update(val):
-        sel_dim = []
-        ax_val_list = []
-        for i in range(nAxes):
-            ax_name = sld_list[i].label.get_text()
-            ax_idx = int(sld_list[i].val)
-            sel_dim.append(int(ax_idx))
-            ax_val = np.round(axes_dict[ax_name][ax_idx], 5)
-            ax_val_list.append(ax_val)
-            sld_list[i].valtext.set_text(str(ax_val))
-        newData = _indexData(data, sel_dim)
-        ax1.cla()
-        pcm = ax1.bar(bar_labels, newData, color='black')
-        ax1.set_ylim(-1, 1)
-        # plt.plot((-0.5, 14.5), (0, 0), 'k-')
-        # ax1.axvspan(-0.5, 2.5, alpha=0.4, color='red')
-        # ax1.axvspan(2.5, 5.5, alpha=0.4, color='blue')
-        # ax1.axvspan(5.5, 14.5, alpha=0.4, color='violet')
-        # print callback result on top of figure
-        if callback is not None:
-            result = callback(newData, *ax_val_list)
-            callback_text.set_text(callback.__name__ + f": {result}")
-        fig.canvas.draw_idle()
-
-    for i in range(nAxes):
-        sld_list[i].on_changed(update)
-
-    return sld_list
-
-
-def AnimatePColorMesh(xdata, ydata, zdata,
-                      axes_dict: dict, fileName="", **pColorMeshArgs):
-    try:  # incase it's a datadict
-        axes_dict.to_dict()
-    except AttributeError:
-        pass
-
-    if len(axes_dict.keys()) > 1:
-        raise NotImplementedError("this function (axis > 1) is still under developing")
-    pColorMeshArgs["shading"] = pColorMeshArgs.get("shading", "auto")
-    pColorMeshArgs["vmin"] = pColorMeshArgs.get("vmin", np.min(zdata))
-    pColorMeshArgs["vmax"] = pColorMeshArgs.get("vmax", np.max(zdata))
-    # initial figure
-    nAxes = len(axes_dict)
-    zdata0 = _indexData(zdata, np.zeros(nAxes))
-    fig = plt.figure(figsize=(7, 7 + nAxes * 0.3))
-
-    callback_text = plt.figtext(0.15, 0.01, "", size="large", figure=fig)
-    plt.subplots_adjust(bottom=nAxes * 0.3 / (7 + nAxes * 0.3) + 0.1)
-    plt.subplot(1, 1, 1)
-    pcm = plt.pcolormesh(xdata, ydata, zdata0.T, **pColorMeshArgs)
-    ax1 = plt.gca()
-    fig.colorbar(pcm, ax=ax1)
-    axcolor = 'lightgoldenrodyellow'
-    for k, v in axes_dict.items():
-        sweepLabel = k
-        sweepValue = v
-
-    # update funtion
-    def update(val):
-        sel_dim = val
-        newZdata = _indexData(zdata, [sel_dim])
-        ax1.cla()
-        pcm = ax1.pcolormesh(xdata, ydata, newZdata.T, **pColorMeshArgs)
-        ax1.set_title(sweepLabel + ": " + str(sweepValue[val]))
-        fig.canvas.draw_idle()
-
-    anim = FuncAnimation(fig, update, frames=np.arange(len(sweepValue)), interval=500)
-    if fileName != "":
-        anim.save(fileName + ".gif", dpi=80, writer='imagemagick')
-    return anim
+#
+# def AnimatePColorMesh(xdata, ydata, zdata,
+#                       axes_dict: dict, fileName="", **pColorMeshArgs):
+#     try:  # incase it's a datadict
+#         axes_dict.to_dict()
+#     except AttributeError:
+#         pass
+#
+#     if len(axes_dict.keys()) > 1:
+#         raise NotImplementedError("this function (axis > 1) is still under developing")
+#     pColorMeshArgs["shading"] = pColorMeshArgs.get("shading", "auto")
+#     pColorMeshArgs["vmin"] = pColorMeshArgs.get("vmin", np.min(zdata))
+#     pColorMeshArgs["vmax"] = pColorMeshArgs.get("vmax", np.max(zdata))
+#     # initial figure
+#     nAxes = len(axes_dict)
+#     zdata0 = _indexData(zdata, np.zeros(nAxes))
+#     fig = plt.figure(figsize=(7, 7 + nAxes * 0.3))
+#
+#     callback_text = plt.figtext(0.15, 0.01, "", size="large", figure=fig)
+#     plt.subplots_adjust(bottom=nAxes * 0.3 / (7 + nAxes * 0.3) + 0.1)
+#     plt.subplot(1, 1, 1)
+#     pcm = plt.pcolormesh(xdata, ydata, zdata0.T, **pColorMeshArgs)
+#     ax1 = plt.gca()
+#     fig.colorbar(pcm, ax=ax1)
+#     axcolor = 'lightgoldenrodyellow'
+#     for k, v in axes_dict.items():
+#         sweepLabel = k
+#         sweepValue = v
+#
+#     # update funtion
+#     def update(val):
+#         sel_dim = val
+#         newZdata = _indexData(zdata, [sel_dim])
+#         ax1.cla()
+#         pcm = ax1.pcolormesh(xdata, ydata, newZdata.T, **pColorMeshArgs)
+#         ax1.set_title(sweepLabel + ": " + str(sweepValue[val]))
+#         fig.canvas.draw_idle()
+#
+#     anim = FuncAnimation(fig, update, frames=np.arange(len(sweepValue)), interval=500)
+#     if fileName != "":
+#         anim.save(fileName + ".gif", dpi=80, writer='imagemagick')
+#     return anim
 
 
 if __name__ == '__main__':
-    axis1 = np.arange(10)
-    axis2 = np.arange(10.124564, 20) * 1e6
-    axis3 = np.arange(20, 30)
-    axis4 = np.arange(30, 40)
-    data_len = 100
-    rdata_I = np.random.rand(len(axis1), len(axis2), len(axis3), len(axis4), data_len)
-    rdata_Q = np.random.rand(len(axis1), len(axis2), len(axis3), len(axis4), data_len)
+    from cuda_cqed.sim import Sim
+    # import gpu_odes.HatGPUODE_D
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib
 
+    # matplotlib.use('Qt5Agg')
 
-    def avgIQ(dataI, dataQ, *args):
-        return (np.average(dataI), np.average(dataQ))
+    pi = np.pi
+    K = 0.0001
+    g3 = 4e-3
+    s1 = 1
+    g2 = g3 * s1
 
+    disp = 1
 
-    axes_dict = dict(axis1=axis1, axis2=axis2, axis3=axis3, axis4=axis4)
-    slds = sliderHist2d(rdata_I, rdata_Q, axes_dict, avgIQ, range=[[0, 1], [0, 1]])
+    sim = Sim(use_complex=True)
+
+    sim.add_param('wb', 0.001 * 2 * pi, is_excitation=True)
+    # sim.add_param('sqrtkb', np.sqrt(1e7 * 2 * np.pi)) # in MHz
+    sim.add_param('g3', g3)
+    sim.add_paramsweep('amplG', 0, 2, 101)  # 18 - gain
+    sim.add_param('IC', disp)
+    sim.add_param('K', K)
+
+    sim.add_EOM('s1', '0', IC_str='amplG')
+
+    # sim.add_EOM('b', '-1j*wb*b - (sqrtkb**2/2)*b + 1j*g3*conjugate(b)*s1 - 1j*b*K*abs(b)**2',IC_str='IC')
+    sim.add_EOM('b', '-1j*wb*b -2j*K*nb*b - 2j*g3*conjugate(b)*s1', IC_str='IC')
+    sim.add_EOM('bb', '-2j*wb*bb -2j*K*bb - 4j*K*nb*bb -2j*g3*s1 - 4j*g3*s1*nb', IC_str='IC**2')
+    sim.add_EOM('nb', '2j*g3*bb*s1 - 2j*g3*conjugate(bb)*s1', IC_str='IC**2')
+
+    sim.set_solve_type('all')
+
+    sim.specify_time(t_f=10000, pts=10001)
+
+    sim.validate()
+
+    x, t = sim.solve()
+
+    xd = x.copy()
+    td = t.copy()
+
+    b = x[2, :] + 1j * x[3, :]
+    bb = x[4, :] + 1j * x[5, :]
+    nb = x[6, :] + 1j * x[7, :]
+
+    axes_dict = {'amplG': sim.paramsweep_dict['amplG'], 'time (ns)': t[0,:]*1e9}
+
+    plt.close('all')
+    cumulant_slider_plot(b, bb, nb, axes_dict, plot_range=20)
 

@@ -26,7 +26,7 @@ def RK_loop(x, dt, kernel_op, idxs, S):
     for i in tqdm(range(0, S), colour="BLUE"):
 
         ti = dt*i
-
+        t_d[:, i] = ti
         '''
         These lines implement the RK4 method
         '''
