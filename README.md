@@ -12,15 +12,16 @@ This Github repo has tools that can translate familiar equations of motion into 
 - incorrectly declaring variables should be caught, current error is confusing ("not supported in C")
 - ~~arbitrary number of sweeps/automatic reshaping~~
 - ~~decimation~~
-- incorrect order of incidices on multi-parameter sweeps
+- incorrect order of indices on multi-parameter sweeps
 
 
 ## Near-term list
 - save to plottr file for artibrary slicing with GUI
 - add statistics for sweeps, like number of derivatives calculated
 - add constant pulse and chirped pulse
-- add multiple pulses for one input
+- ~~add multiple pulses for one input~~
+- add special parameter in solver for drives defined directly, not derivative of drive
 
 ## Wishlist
 - generate cumulant EoMs
-- allow sweep of initial conditions
+- ~~allow sweep of initial conditions~~
