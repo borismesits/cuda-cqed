@@ -21,6 +21,8 @@ This Github repo has tools that can translate familiar equations of motion into 
 - add constant pulse and chirped pulse
 - ~~add multiple pulses for one input~~
 - add special parameter in solver for drives defined directly, not derivative of drive
+- add delayed-time variables in EoMSs to simulate transmission lines with finite propagation time ('all' mode only)
+- add CPU-mode for sweeps to make compatible with machines without CUDA
 
 ## Wishlist
 - generate cumulant EoMs
