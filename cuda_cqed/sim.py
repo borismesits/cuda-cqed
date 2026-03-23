@@ -38,8 +38,9 @@ class Sim():
 
     def make_pulse(self, omega, A, phi, start, stop, ramp):
 
-        return str(A) + '/2*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(start) + ')/' + str(
-            ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + '))'
+        return '-' + str(A) + '/2*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(start) + ')/' + str(
+            ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + ')) + ' + str(A) + '/(2*' + str(ramp) + ')*exp(-1j*(' + str(omega) + \
+            '*t +' + str(phi) + '))*(sech((t-' + str(start) + ')/' + str(ramp) + ')**2-sech((t-' + str(stop) + ')/' + str(ramp) + ')**2)'
 
     def make_pulse_sequence(self, pulses):
 
@@ -105,7 +106,7 @@ class Sim():
             self.solve_type = type_str
 
         else:
-            warnings.warn("Specified solve type not found.", RuntimeWarning)
+            warnings.warn("Specified solve type not found. Options are 'decimate', 'avg', and 'all'.", RuntimeWarning)
             return
 
     def specify_time(self, pts=None, t_f=None, pts_per_cycle=None, num_cycles=None, d_factor=None):

@@ -222,4 +222,5 @@ if __name__ == '__main__':
 
     plt.close('all')
     cumulant_slider_plot(b, bb, nb, axes_dict, plot_range=20)
+    
 
