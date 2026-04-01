@@ -36,10 +36,13 @@ class Sim():
         self.PTS_PER_CYCLE = None
         self.NUM_CYCLES = None
         self.is_time_specified = False
+        self.num_drive_terms = 0
 
-    def make_pulse(self, omega, A, phi, start, stop, ramp):
+    def make_pulse(self, omega, ampl, phi, start, stop, ramp, A='0', B='0', C='0', D='0'):
 
-        return '-' + str(A) + '/2*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(
+        omega_string = omega + ' + ' + str(A) + '*t + ' + str(B) + '*t**2'
+
+        return '-' + str(ampl) + '/2*exp(-1j*((' + omega_string + ')*t +' + str(phi) + '))*(tanh((t-' + str(
             start) + ')/' + str(
             ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + '))'
 
@@ -88,6 +91,11 @@ class Sim():
         '''
         self.drive_var_strs.append(drive_var_str)
         self.drive_eom_strs.append(drive_eom_str)
+
+        if self.use_complex:
+            self.num_drive_terms += 2
+        else:
+            self.num_drive_terms += 1
 
     def add_param(self, name, value, is_excitation=False):
 
@@ -258,7 +266,7 @@ class Sim():
                 self.var_strs_updated.append(var_str + '_R')
                 self.var_strs_updated.append(var_str + '_I')
 
-        x = RK_loop_CPU(M, t, self.numpy_kernel, self.numpy_get_ICs)
+        x = RK_loop_CPU(M, t, self.numpy_kernel, self.numpy_get_ICs, self.num_drive_terms)
 
         return x, t
 
@@ -287,11 +295,11 @@ class Sim():
 
         if self.solve_type == 'decimate':
             I_demod, Q_demod, t_d = GPUODE_decimate(self.dt, self.shape, self.kernel, self.IC_kernel, self.D_FACTOR,
-                                                    self.d_omega, self.S, only_final=only_final)
+                                                    self.d_omega, self.S, self.num_drive_terms, only_final=only_final)
             return I_demod, Q_demod, t_d
 
         elif self.solve_type == 'all':
-            x_demod, t_d = GPUODE(np.array(self.dt), self.shape, self.kernel, self.IC_kernel, self.S)
+            x_demod, t_d = GPUODE(np.array(self.dt), self.shape, self.kernel, self.IC_kernel, self.S, self.num_drive_terms)
             # todo add only_final option for 'all' solve type
 
             return x_demod, t_d

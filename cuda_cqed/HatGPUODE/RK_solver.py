@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-def RK_loop(x, dt, kernel_op, idxs, S):
+def RK_loop(x, dt, kernel_op, idxs, S, num_drive_terms):
     '''
     Implements a GPU-accelerated RK4 method for simulating systems of ODEs, with built-in decimation of the
     data to reduce amount of saved information.
@@ -37,6 +37,7 @@ def RK_loop(x, dt, kernel_op, idxs, S):
         k4 = f_dxdt(x + k3 * dt, ti + dt, dt, kernel_op, idxs)
 
         x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+        x[-num_drive_terms:, :] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:, :]
 
         x_d[:,:,i] = x
 
@@ -60,7 +61,7 @@ def f_dxdt(xi, t, dt, kernel_op, idxs):
     return cp.array(dxdt)
 
 
-def GPUODE(dt, shape, kernel_op, IC_kernel_op, S):
+def GPUODE(dt, shape, kernel_op, IC_kernel_op, S, num_drive_terms):
     '''
     Wrapper for the RK loop that creates all the necessary arrays, since
     you can't create arrays inside a jit function.
@@ -91,7 +92,7 @@ def GPUODE(dt, shape, kernel_op, IC_kernel_op, S):
 
     dt = cp.array(dt.flatten(), dtype=cp.float64)
 
-    x, t_d = RK_loop(x0, dt, kernel_op, IDXSCP, S)
+    x, t_d = RK_loop(x0, dt, kernel_op, IDXSCP, S, num_drive_terms)
 
     x_np = np.reshape(cp.asnumpy(x), (*shape, S))
     t_d_np = np.reshape(cp.asnumpy(t_d), (*shape[1:], S))

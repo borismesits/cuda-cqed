@@ -3,7 +3,7 @@ import sympy as sp
 import numpy as np
 from tqdm import tqdm
 
-def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
+def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S, num_drive_terms):
     '''
     Implements a GPU-accelerated RK4 method for simulating systems of ODEs, with built-in decimation of the
     data to reduce amount of saved information.
@@ -49,6 +49,7 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
         k4 = f_dxdt(x + k3 * dt, ti + dt, dt, kernel_op, idxs)
 
         x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+        x[-num_drive_terms:, :] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:, :]
 
         integrated_I += x * cp.cos(d_omega * ti) / d_factor
         integrated_Q += x * cp.sin(d_omega * ti) / d_factor
@@ -60,7 +61,7 @@ def RK_loop_decimate(x, dt, kernel_op, idxs, d_factor, d_omega, S):
     return I_demod, Q_demod, t_d
 
 
-def RK_loop_decimate_onlyfinal(x, dt, kernel_op, idxs, d_factor, d_omega, S):
+def RK_loop_decimate_onlyfinal(x, dt, kernel_op, idxs, d_factor, d_omega, S, num_drive_terms):
     '''
     Implements a GPU-accelerated RK4 method for simulating systems of ODEs, with built-in decimation of the
     data to reduce amount of saved information.
@@ -105,6 +106,7 @@ def RK_loop_decimate_onlyfinal(x, dt, kernel_op, idxs, d_factor, d_omega, S):
         k4 = f_dxdt(x + k3 * dt, ti + dt, dt, kernel_op, idxs)
 
         x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+        x[-num_drive_terms:, :] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:, :]
 
         integrated_I += x * cp.cos(d_omega * ti) / d_factor
         integrated_Q += x * cp.sin(d_omega * ti) / d_factor
@@ -128,7 +130,7 @@ def f_dxdt(xi, t, dt, kernel_op, idxs):
     return cp.array(dxdt)
 
 
-def GPUODE_decimate(dt, shape, kernel_op, IC_kernel_op, d_factor, d_omega, S, only_final=False):
+def GPUODE_decimate(dt, shape, kernel_op, IC_kernel_op, d_factor, d_omega, S, num_drive_terms, only_final=False):
     '''
     Wrapper for the RK loop that creates all the necessary arrays, since
     you can't create arrays inside a jit function.
@@ -161,14 +163,14 @@ def GPUODE_decimate(dt, shape, kernel_op, IC_kernel_op, d_factor, d_omega, S, on
     dt = cp.array(dt.flatten(), dtype=cp.float64)
 
     if only_final:
-        I_demod, Q_demod, t_d = RK_loop_decimate_onlyfinal(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S)
+        I_demod, Q_demod, t_d = RK_loop_decimate_onlyfinal(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S, num_drive_terms)
 
         I_demod_np = np.reshape(cp.asnumpy(I_demod), shape)
         Q_demod_np = np.reshape(cp.asnumpy(Q_demod), shape)
         t_d_np = np.reshape(cp.asnumpy(t_d), shape[1:])
 
     else:
-        I_demod, Q_demod, t_d = RK_loop_decimate(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S)
+        I_demod, Q_demod, t_d = RK_loop_decimate(x0, dt, kernel_op, IDXSCP, d_factor, d_omega, S, num_drive_terms)
 
         I_demod_np = np.reshape(cp.asnumpy(I_demod), (*shape, S//d_factor))
         Q_demod_np = np.reshape(cp.asnumpy(Q_demod), (*shape, S//d_factor))

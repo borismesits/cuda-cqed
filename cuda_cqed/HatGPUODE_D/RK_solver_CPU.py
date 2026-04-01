@@ -4,7 +4,7 @@ from numpy import * # we have to do a star import here to use eval() on arbitary
 from tqdm import tqdm
 import numpy as np
 
-def RK_loop_CPU(M, tlist, numpy_kernel, numpy_IC_kernel):
+def RK_loop_CPU(M, tlist, numpy_kernel, numpy_IC_kernel, num_drive_terms):
     '''
     This is for solving single-variation simulations on the CPU (which is faster in this case).
     M is the number of modes
@@ -26,6 +26,7 @@ def RK_loop_CPU(M, tlist, numpy_kernel, numpy_IC_kernel):
         k4 = np.array(numpy_kernel(tlist[i] + dt, * (x[:, i] + k3 * dt)))
 
         x[:,i+1] = x[:,i] + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+        x[-num_drive_terms:, i+1] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:]
 
     print('...finished CPU quick solve!')
 
