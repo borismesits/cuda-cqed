@@ -252,8 +252,8 @@ def generate_kernel(var_strs, eom_strs, drive_var_strs, drive_eom_strs, IC_strs,
 
     for i in range(0, len(drive_var_strs)):
         if use_complex:
-            kernel_body += 'double ' + drive_var_strs[i] + '_R=' + drive_eom_cs[2 * i] + '; \n'
-            kernel_body += 'double ' + drive_var_strs[i] + '_I=' + drive_eom_cs[2 * i + 1] + '; \n'
+            kernel_body += drive_var_strs[i] + '_R=' + drive_eom_cs[2 * i] + '; \n'
+            kernel_body += drive_var_strs[i] + '_I=' + drive_eom_cs[2 * i + 1] + '; \n'
 
             '''
             it may seem weird that we are defining the initial condition of the drive terms, which by definition
@@ -356,69 +356,47 @@ def generate_pycode(var_strs, eom_strs, drive_var_strs, drive_eom_strs, IC_strs,
 
     for j in range(0, len(drive_eom_strs)):
 
-        eom_str = eom_strs[j]
-        IC_str = IC_strs[j]
+        drive_eom_str = drive_eom_strs[j]
 
         if use_complex:
 
-            eom_sp = sp.sympify(eom_str, locals=symbols_and_parameters_dict)
-            IC_sp = sp.sympify(IC_str, locals=symbols_and_parameters_dict)
+            drive_eom_sp = sp.sympify(drive_eom_str, locals=symbols_and_parameters_dict)
 
             for i in range(0, len(var_strs)):
                 symbol_R = sp.Symbol(var_strs[i] + '_R', real=True)
                 symbol_I = sp.Symbol(var_strs[i] + '_I', real=True)
 
-                eom_sp = eom_sp.subs(symbols_and_parameters_dict[var_strs[i]], symbol_R + 1j * symbol_I)
+                drive_eom_sp = drive_eom_sp.subs(symbols_and_parameters_dict[var_strs[i]], symbol_R + 1j * symbol_I)
 
             for i in range(0, len(drive_var_strs)):
                 symbol_R = sp.Symbol(drive_var_strs[i] + '_R', real=True)
                 symbol_I = sp.Symbol(drive_var_strs[i] + '_I', real=True)
 
-                eom_sp = eom_sp.subs(symbols_and_parameters_dict[drive_var_strs[i]], symbol_R + 1j * symbol_I)
+                drive_eom_sp = drive_eom_sp.subs(symbols_and_parameters_dict[drive_var_strs[i]], symbol_R + 1j * symbol_I)
 
             # First, convert expressions for EoMs and initial conditions into sympy format
-            eom_sp_R = sp.re(eom_sp)
-            eom_sp_I = sp.im(eom_sp)
-            eom_sps.append(eom_sp_R)
-            eom_sps.append(eom_sp_I)
-
-            IC_sp_R = sp.re(IC_sp)
-            IC_sp_I = sp.im(IC_sp)
-            IC_sps.append(IC_sp_R)
-            IC_sps.append(IC_sp_I)
+            drive_eom_sp_R = sp.re(drive_eom_sp)
+            drive_eom_sp_I = sp.im(drive_eom_sp)
+            eom_sps.append(drive_eom_sp_R)
+            eom_sps.append(drive_eom_sp_I)
 
             # Then, convert into numpy format with pycode(). This catches the most functions
-            eom_np_R = pycode(eom_sp_R, fully_qualified_modules=False)
-            eom_np_I = pycode(eom_sp_I, fully_qualified_modules=False)
-            eom_nps.append(eom_np_R)
-            eom_nps.append(eom_np_I)
+            drive_eom_np_R = pycode(drive_eom_sp_R, fully_qualified_modules=False)
+            drive_eom_np_I = pycode(drive_eom_sp_I, fully_qualified_modules=False)
+            eom_nps.append(drive_eom_np_R)
+            eom_nps.append(drive_eom_np_I)
 
-            IC_np_R = pycode(IC_sp_R, fully_qualified_modules=False)
-            IC_np_I = pycode(IC_sp_I, fully_qualified_modules=False)
-            IC_nps.append(IC_np_R)
-            IC_nps.append(IC_np_I)
-
-            numpy_kernel += '    d' + var_strs[j] + '_Rdt = ' + eom_np_R + ' \n'
-            numpy_kernel += '    d' + var_strs[j] + '_Idt = ' + eom_np_I + ' \n'
-
-            numpy_IC_kernel += '    IC_' + var_strs[j] + '_R = ' + IC_np_R + ' \n'
-            numpy_IC_kernel += '    IC_' + var_strs[j] + '_I = ' + IC_np_I + ' \n'
+            numpy_kernel += '    ' + drive_var_strs[j] + '_R = ' + drive_eom_np_R + ' \n'
+            numpy_kernel += '    ' + drive_var_strs[j] + '_I = ' + drive_eom_np_I + ' \n'
 
         else:
             # First, convert expressions for EoMs and initial conditions into sympy format
-            eom_sp = sp.sympify(eom_str)
+            eom_sp = sp.sympify(drive_eom_str)
             eom_sps.append(eom_sp)
 
-            IC_sp = sp.sympify(IC_str)
-            IC_sps.append(IC_sp)
+            numpy_kernel += '    ' + drive_var_str[j] + ' = ' + drive_eom_sp + ' \n'
 
-            # Then, convert into numpy format with pycode(). This catches the most functions
-            IC_np = pycode(IC_sp, fully_qualified_modules=False)
-            IC_nps.append(IC_np)
-
-            numpy_kernel += '    d' + var_strs[j] + 'dt = ' + exp_np + ' \n'
-
-            numpy_IC_kernel += '    IC_' + var_strs[j] + ' = ' + IC_np + ' \n'
+            numpy_IC_kernel += '    IC_' + drive_var_str[j] + ' = 0 \n'
 
     for j in range(0, len(eom_strs)):
 
@@ -482,7 +460,7 @@ def generate_pycode(var_strs, eom_strs, drive_var_strs, drive_eom_strs, IC_strs,
             IC_np = pycode(IC_sp, fully_qualified_modules=False)
             IC_nps.append(IC_np)
 
-            numpy_kernel += '    d' + var_strs[j] + 'dt = ' + exp_np + ' \n'
+            numpy_kernel += '    d' + var_strs[j] + 'dt = ' + eom_sp + ' \n'
 
             numpy_IC_kernel += '    IC_' + var_strs[j] + ' = ' + IC_np + ' \n'
 
@@ -504,6 +482,21 @@ def generate_pycode(var_strs, eom_strs, drive_var_strs, drive_eom_strs, IC_strs,
         else:
             numpy_kernel += 'd' + var_str + 'dt, '
             numpy_IC_kernel += 'IC_' + var_str + ', '
+
+    for i in range(0, len(drive_var_strs)):
+
+        drive_var_str = drive_var_strs[i]
+
+        if use_complex:
+            numpy_kernel += drive_var_str + '_R, '
+            numpy_kernel += drive_var_str + '_I, '
+
+            numpy_IC_kernel += '0, '
+            numpy_IC_kernel += '0, '
+
+        else:
+            numpy_kernel += drive_var_str + 'dt, '
+            numpy_IC_kernel += '0, '
 
 
     numpy_kernel = numpy_kernel[:-2]

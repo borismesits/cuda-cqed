@@ -204,12 +204,29 @@ if __name__ == '__main__':
 
     sim.validate(print_result=True)
 
-    x, t = sim.solve()
+    # x, t = sim.solve()
+    #
+    # xd = x.copy()
+    # td = t.copy()
+    #
+    # b = x[0, :] + 1j * x[1, :]
+    # bin = x[2, :] + 1j * x[3, :] # drive terms are always last
+    #
+    # plt.figure()
+    # plt.plot(np.abs(b[:, -1].transpose()))
+    #
+    # plt.figure()
+    # plt.plot(np.real(bin[49,:]))
+    #
+    x, t = sim.quick_trace()
 
-    xd = x.copy()
-    td = t.copy()
-
-    b = x[0, :] + 1j * x[1, :]
-
-    plt.plot(np.abs(b[:,-1].transpose()))
+    # plt.figure(1)
+    # plt.clf()
+    # plt.plot(t * 1e9, x[0, :] / np.max(x[0, :]), color=(1, 0, 0, 0.7), label='a in')
+    # plt.plot(t * 1e9, x[2, :] / np.max(x[2, :]) + 2, color=(0, 1, 0, 0.5), label='a')
+    # plt.xlabel('Time (ns)')
+    # plt.ylabel('Normalized amplitude')
+    # plt.legend()
+    # plt.grid()
+    # plt.show()
 
