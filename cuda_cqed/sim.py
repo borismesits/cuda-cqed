@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import cupy as cp
 from cuda_cqed.HatGPUODE_D.util import generate_kernel, generate_pycode
 from cuda_cqed.HatGPUODE_D.RK_solver_decimate import GPUODE_decimate
 from cuda_cqed.HatGPUODE.RK_solver import GPUODE
@@ -29,6 +28,8 @@ class Sim():
         self.solve_type = ''
         self.var_strs = []
         self.eom_strs = []
+        self.drive_var_strs = [] # these equations define the variable values, not derivatives, for convenient drive terms
+        self.drive_eom_strs = []  # these equations define the variable values, not derivatives, for convenient drive terms
         self.IC_strs = []
         self.use_complex = use_complex  # are the dependent variables complex (like Langevin equation) or real (like classical)?
         self.excitation_freq = '' # the name of a special variable that represents a drive or pump frequency. Determines decimation parameters. Only one variable can be this
@@ -38,9 +39,25 @@ class Sim():
 
     def make_pulse(self, omega, A, phi, start, stop, ramp):
 
-        return '-' + str(A) + '/2*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(start) + ')/' + str(
-            ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + ')) + ' + str(A) + '/(2*' + str(ramp) + ')*exp(-1j*(' + str(omega) + \
-            '*t +' + str(phi) + '))*(sech((t-' + str(start) + ')/' + str(ramp) + ')**2-sech((t-' + str(stop) + ')/' + str(ramp) + ')**2)'
+        return '-' + str(A) + '/2*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(
+            start) + ')/' + str(
+            ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + '))'
+
+    def make_pulse_derivative(self, omega, A, phi, start, stop, ramp):
+        '''
+        this function no longer has a use
+        '''
+        return '-' + str(A) + '/2*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(
+            start) + ')/' + str(
+            ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + ')) + ' + str(A) + '/(2*' + str(
+            ramp) + ')*exp(-1j*(' + str(omega) + \
+            '*t +' + str(phi) + '))*(sech((t-' + str(start) + ')/' + str(ramp) + ')**2-sech((t-' + str(
+                stop) + ')/' + str(ramp) + ')**2)'
+
+    def make_pulse_debug(self, omega, A, phi, start, stop, ramp):
+
+        return str(A) + '/2*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(start) + ')/' + str(
+            ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + '))'
 
     def make_pulse_sequence(self, pulses):
 
@@ -54,14 +71,23 @@ class Sim():
         '''
         In order for the solver to parse our description of some set of equations, we need to specify the following.
         You can also add parameters in a later step.
-        :param var_list: list of strings, the names of dependent vars (not time)
-        :param eom_list: the equations of motion
-        :param IC: initial condition
+        :param var_str: string, the name of dependent var (not time)
+        :param eom_str: string, equation of motion
+        :param IC_str: string, initial condition
         '''
-
         self.var_strs.append(var_str)
         self.eom_strs.append(eom_str)
         self.IC_strs.append(IC_str)
+
+    def add_drive_EOM(self, drive_var_str, drive_eom_str):
+        '''
+        In order for the solver to parse our description of some set of equations, we need to specify the following.
+        You can also add parameters in a later step.
+        :param var_str: string, the name of dependent var (not time)
+        :param drive_str: string, drive equation
+        '''
+        self.drive_var_strs.append(drive_var_str)
+        self.drive_eom_strs.append(drive_eom_str)
 
     def add_param(self, name, value, is_excitation=False):
 
@@ -174,7 +200,7 @@ class Sim():
 
         try:
 
-            kernel_string, IC_kernel_string, kernel, IC_kernel, shape = generate_kernel(self.var_strs, self.eom_strs, self.IC_strs,
+            kernel_string, IC_kernel_string, kernel, IC_kernel, shape = generate_kernel(self.var_strs, self.eom_strs, self.drive_var_strs, self.drive_eom_strs, self.IC_strs,
                                                                                                    self.param_dict,
                                                                                                    use_complex=self.use_complex, print_result=print_result)
             self.kernel_string = kernel_string
@@ -183,7 +209,7 @@ class Sim():
             self.IC_kernel = IC_kernel
             self.shape = shape
 
-            eom_nps, numpy_kernel_string, numpy_IC_kernel_string = generate_pycode(self.var_strs, self.eom_strs, self.IC_strs,  self.param_dict_nosweep, use_complex=self.use_complex, print_result=print_result)
+            eom_nps, numpy_kernel_string, numpy_IC_kernel_string = generate_pycode(self.var_strs, self.eom_strs, self.drive_var_strs, self.drive_eom_strs, self.IC_strs,  self.param_dict_nosweep, use_complex=self.use_complex, print_result=print_result)
 
             self.eom_nps = eom_nps
             self.numpy_kernel_string = numpy_kernel_string
@@ -205,7 +231,7 @@ class Sim():
         except RuntimeError:
             warnings.warn("Kernel generation failed.", RuntimeWarning)
 
-    def quick_trace(self,print_kernel=False):
+    def quick_trace(self, print_kernel=False):
         '''
         The tricky thing about GPU accleration is, it's almost never faster for just one or a few parallel sims. The
         advantage comes with massive parallelization. Thus, this function runs a CPU simulation, saving all data, for
@@ -271,9 +297,5 @@ class Sim():
             return x_demod, t_d
         else:
             raise NotImplementedError
-
-
-
-
 
 

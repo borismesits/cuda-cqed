@@ -14,12 +14,13 @@ import h5py
 from matplotlib.animation import FuncAnimation
 import warnings
 import matplotlib as mpl
+
 mpl.use('Qt5Agg')
 
 
 def cumulant_slider_plot(a, aa, na,
-                 axes_dict: dict, plot_range=5, callback: Callable = None, adaptiveRange=False,
-                 **hist2dArgs) -> List[Slider]:
+                         axes_dict: dict, plot_range=5, callback: Callable = None, adaptiveRange=False,
+                         **hist2dArgs) -> List[Slider]:
     """Create a slider plot widget. The caller needs to maintain a reference to
     the returned Slider objects to keep the widget activate
 
@@ -42,11 +43,11 @@ def cumulant_slider_plot(a, aa, na,
     plt.subplots_adjust(bottom=nAxes * 0.3 / (7 + nAxes * 0.3) + 0.1)
     plt.subplot(1, 1, 1)
     main_ax = plt.gca()
-    main_ax.set_xlim([-plot_range,plot_range])
+    main_ax.set_xlim([-plot_range, plot_range])
     main_ax.set_ylim([-plot_range, plot_range])
     main_ax.grid()
 
-    line = plot_Qfunc(a[0,0], aa[0,0], na[0,0], ax=None, line=None)
+    line = plot_Qfunc(a[0, 0], aa[0, 0], na[0, 0], ax=None, line=None)
 
     axcolor = 'lightgoldenrodyellow'
     sld_list = []
@@ -83,6 +84,7 @@ def cumulant_slider_plot(a, aa, na,
     for i in range(nAxes):
         sld_list[i].on_changed(update)
     return sld_list
+
 
 def plot_Qfunc(a, aa, na, ax=None, line=None):
     if ax == None:
@@ -185,25 +187,20 @@ if __name__ == '__main__':
     s1 = 1
     g2 = g3 * s1
 
-    disp = 1
-
     sim = Sim(use_complex=True)
 
-    sim.add_param('wb', 0.001 * 2 * pi, is_excitation=True)
-    # sim.add_param('sqrtkb', np.sqrt(1e7 * 2 * np.pi)) # in MHz
+    sim.add_paramsweep('wd', -5 * 2 * pi, 5 * 2 * pi, 101, is_excitation=True)
+    sim.add_param('wb', 0 * 2 * pi)
+    sim.add_param('sqrtkb', np.sqrt(5 * 2 * np.pi))  # in MHz
     sim.add_param('g3', g3)
-    sim.add_paramsweep('amplG', 0, 2, 101)  # 18 - gain
-    sim.add_param('IC', disp)
     sim.add_param('K', K)
+    sim.add_param('A', 1)
 
-    sim.add_drive_EOM('s1', 'exp(-1j*t*wb)')
-    sim.add_EOM('b', '-1j*wb*b -2j*K*nb*b - 2j*g3*conjugate(b)*s1', IC_str='IC')
-    sim.add_EOM('bb', '-2j*wb*bb -2j*K*bb - 4j*K*nb*bb -2j*g3*s1 - 4j*g3*s1*nb', IC_str='IC**2')
-    sim.add_EOM('nb', '2j*g3*bb*s1 - 2j*g3*conjugate(bb)*s1', IC_str='IC**2')
-
+    sim.add_drive_EOM('bin', 'A*exp(-1j*t*wd)')
+    sim.add_EOM('b', '-1j*wb*b - bin*sqrtkb**2 - (sqrtkb)/2*b')
     sim.set_solve_type('all')
 
-    sim.specify_time(t_f=10000, pts=10001)
+    sim.specify_time(t_f=100, pts=10001)
 
     sim.validate(print_result=True)
 
@@ -213,12 +210,6 @@ if __name__ == '__main__':
     td = t.copy()
 
     b = x[0, :] + 1j * x[1, :]
-    bb = x[2, :] + 1j * x[3, :]
-    nb = x[4, :] + 1j * x[5, :]
 
-    axes_dict = {'amplG': sim.paramsweep_dict['amplG'], 'time (ns)': t[0,:]*1e9}
-
-    plt.close('all')
-    cumulant_slider_plot(b, bb, nb, axes_dict, plot_range=20)
-    
+    plt.plot(np.abs(b[:,-1].transpose()))
 

@@ -31,11 +31,12 @@ def convert_power_arg_to_float64(inputt):
     return string
 
 
-def generate_kernel(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, print_result=False):
+def generate_kernel(var_strs, eom_strs, drive_var_strs, drive_eom_strs, IC_strs, param_dict, use_complex=False, print_result=False):
     '''
-
     :param var_strs: The list of strings containing the names of quadratures (indep. variables in ODEs)
-    :param exp_strs: The equations of motion. Should be in terms of var_strs
+    :param eom_strs: The equations of motion. Should be in terms of var_strs
+    :param drive_var_strs: these terms are given explicitly by the EoM (rather than calculating derivatives)
+    :param drive_eom_strs:
     :param params: Any variables in the exp_strs not listed in var_strs must be defined here.
         There are two ways:
             e.g., ('omega_0', 10 * 2 * np.pi), OR
@@ -46,15 +47,18 @@ def generate_kernel(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
                                                             cupy kernel itself.
     '''
 
-    exp_sps = []  # sympy translation
-    exp_cs = []  # C code translation
+    eom_sps = []  # sympy translation
+    eom_cs = []  # C code translation
+
+    drive_eom_sps = []  # sympy translation
+    drive_eom_cs = []  # C code translation
 
     IC_sps = []  # sympy translation
     IC_cs = []  # C code translation
 
-    for i in range(0, len(exp_strs)):
+    for i in range(0, len(eom_strs)):
 
-        exp_str = exp_strs[i]
+        eom_str = eom_strs[i]
         IC_str = IC_strs[i]
 
         param_dict_keys = list(param_dict.keys())
@@ -66,11 +70,8 @@ def generate_kernel(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
             real-valued.
             '''
 
-            symbols = sp.symbols(var_strs)
             symbols_and_parameters_dict = {}
-            symbols_and_parameters_dict['t'] = sp.Symbol('t', real=True) # t is a special variable
-
-            parameters = []
+            symbols_and_parameters_dict['t'] = sp.Symbol('t', real=True)  # t is a special variable
 
             for i in range(0, len(param_dict_keys)):
                 parameter = sp.Symbol(param_dict_keys[i], real=True)
@@ -78,33 +79,43 @@ def generate_kernel(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
 
             for i in range(0, len(var_strs)):
                 symbol = sp.Symbol(var_strs[i], real=True)
-                symbols_and_parameters_dict[var_strs[i]] = symbols[i]
+                symbols_and_parameters_dict[var_strs[i]] = symbol
 
-            exp_sp = sp.sympify(exp_str, locals=symbols_and_parameters_dict)
+            for i in range(0, len(drive_var_strs)):
+                symbol = sp.Symbol(drive_var_strs[i], real=True)
+                symbols_and_parameters_dict[drive_var_strs[i]] = symbol
+
+            eom_sp = sp.sympify(eom_str, locals=symbols_and_parameters_dict)
             IC_sp = sp.sympify(IC_str, locals=symbols_and_parameters_dict)
 
             for i in range(0, len(var_strs)):
+                symbol_R = sp.Symbol(var_strs[i] + '_R', real=True)
+                symbol_I = sp.Symbol(var_strs[i] + '_I', real=True)
 
-                symbol_R = sp.Symbol(var_strs[i] + '_R',real=True)
-                symbol_I = sp.Symbol(var_strs[i] + '_I',real=True)
+                eom_sp = eom_sp.subs(symbols_and_parameters_dict[var_strs[i]], symbol_R + 1j * symbol_I)
+                IC_sp = IC_sp.subs(symbols_and_parameters_dict[var_strs[i]], symbol_R + 1j * symbol_I)
 
-                exp_sp = exp_sp.subs(symbols[i], symbol_R + 1j * symbol_I)
-                IC_sp = IC_sp.subs(symbols[i], symbol_R + 1j * symbol_I)
+            for i in range(0, len(drive_var_strs)):
+                symbol_R = sp.Symbol(drive_var_strs[i] + '_R', real=True)
+                symbol_I = sp.Symbol(drive_var_strs[i] + '_I', real=True)
 
-            exp_sp_R = sp.re(exp_sp)
-            exp_sp_I = sp.im(exp_sp)
+                eom_sp = eom_sp.subs(symbols_and_parameters_dict[drive_var_strs[i]], symbol_R + 1j * symbol_I)
+                IC_sp = IC_sp.subs(symbols_and_parameters_dict[drive_var_strs[i]], symbol_R + 1j * symbol_I)
+
+            eom_sp_R = sp.re(eom_sp)
+            eom_sp_I = sp.im(eom_sp)
             IC_sp_R = sp.re(IC_sp)
             IC_sp_I = sp.im(IC_sp)
 
-            exp_sps.append(exp_sp_R)
-            exp_sps.append(exp_sp_I)
+            eom_sps.append(eom_sp_R)
+            eom_sps.append(eom_sp_I)
             IC_sps.append(IC_sp_R)
             IC_sps.append(IC_sp_I)
 
-            exp_c_R = sp.ccode(exp_sp_R)
-            exp_c_I = sp.ccode(exp_sp_I)
-            exp_cs.append(exp_c_R)
-            exp_cs.append(exp_c_I)
+            eom_c_R = sp.ccode(eom_sp_R)
+            eom_c_I = sp.ccode(eom_sp_I)
+            eom_cs.append(eom_c_R)
+            eom_cs.append(eom_c_I)
 
             IC_c_R = sp.ccode(IC_sp_R)
             IC_c_I = sp.ccode(IC_sp_I)
@@ -112,47 +123,94 @@ def generate_kernel(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
             IC_cs.append(IC_c_I)
 
         else:
-            exp_sp = sp.sympify(exp_str)
+            eom_sp = sp.sympify(eom_str)
             IC_sp = sp.sympify(IC_str)
 
-            exp_sps.append(exp_sp)
+            eom_sps.append(eom_sp)
             IC_sps.append(IC_sp)
 
-            exp_c = sp.ccode(exp_sp)
-            exp_cs.append(exp_c)
+            eom_c = sp.ccode(eom_sp)
+            eom_cs.append(eom_c)
             IC_c = sp.ccode(IC_sp)
             IC_cs.append(IC_c)
 
-    kernel_input = 'float64 dt, float64 t, ' # this "kernel" is a string that will get converted to a cuda GPU kernel. It defines the EoMs
-    IC_kernel_input = '' # this "kernel" handles the initial conditions
+    for i in range(0, len(drive_eom_strs)):
 
-    shape = [len(exp_cs)]
-
-    for var_str in var_strs:
+        drive_eom_str = drive_eom_strs[i]
+        param_dict_keys = list(param_dict.keys())
 
         if use_complex:
+            drive_eom_sp = sp.sympify(drive_eom_str, locals=symbols_and_parameters_dict)
 
-            kernel_input += 'float64 ' + var_str + '_R, '
-            kernel_input += 'float64 ' + var_str + '_I, '
+            for i in range(0, len(drive_var_strs)):
+
+                symbol_R = sp.Symbol(drive_var_strs[i] + '_R',real=True)
+                symbol_I = sp.Symbol(drive_var_strs[i] + '_I',real=True)
+
+                drive_eom_sp = drive_eom_sp.subs(symbols_and_parameters_dict[drive_var_strs[i]], symbol_R + 1j * symbol_I)
+
+            drive_eom_sp_R = sp.re(drive_eom_sp)
+            drive_eom_sp_I = sp.im(drive_eom_sp)
+
+            drive_eom_sps.append(drive_eom_sp_R)
+            drive_eom_sps.append(drive_eom_sp_I)
+
+            drive_eom_c_R = sp.ccode(drive_eom_sp_R)
+            drive_eom_c_I = sp.ccode(drive_eom_sp_I)
+            drive_eom_cs.append(drive_eom_c_R)
+            drive_eom_cs.append(drive_eom_c_I)
 
         else:
+            drive_eom_sp = sp.sympify(drive_eom_str)
+            drive_eom_sps.append(drive_eom_sp)
+
+            drive_eom_c = sp.ccode(drive_eom_sp)
+            drive_eom_cs.append(drive_eom_c)
+
+    kernel_input = 'float64 dt, float64 t,  ' # this "kernel" is a string that will get converted to a cuda GPU kernel. It defines the EoMs
+    IC_kernel_input = ''  # this "kernel" handles the initial conditions
+
+    shape = [len(eom_cs)+len(drive_eom_cs)]
+
+    for var_str in var_strs:
+        if use_complex:
+            kernel_input += 'float64 ' + var_str + '_R, '
+            kernel_input += 'float64 ' + var_str + '_I, '
+        else:
             kernel_input += 'float64 ' + var_str + ', '
+
+    for drive_var_str in drive_var_strs:
+        if use_complex:
+            kernel_input += 'float64 ' + drive_var_str + '_R_temp, '
+            kernel_input += 'float64 ' + drive_var_str + '_I_temp, '
+        else:
+            kernel_input += 'float64 ' + drive_var_str + ', '
 
     kernel_output = ''
     IC_kernel_output = ''
 
     for var_str in var_strs:
-
         if use_complex:
             kernel_output += 'float64 d' + var_str + 'dt_R, '
             kernel_output += 'float64 d' + var_str + 'dt_I, '
 
             IC_kernel_output += 'float64 IC_' + var_str + '_R, '
             IC_kernel_output += 'float64 IC_' + var_str + '_I, '
-
         else:
             kernel_output += 'float64 d' + var_str + 'dt, '
             IC_kernel_output += 'float64 IC_' + var_str + 'dt, '
+
+    for drive_var_str in drive_var_strs:
+        if use_complex:
+            kernel_output += 'float64 ' + drive_var_str + '_R, '
+            kernel_output += 'float64 ' + drive_var_str + '_I, '
+
+            IC_kernel_output += 'float64 IC_' + drive_var_str + '_R, '
+            IC_kernel_output += 'float64 IC_' + drive_var_str + '_I, '
+        else:
+            kernel_output += 'float64 ' + drive_var_str + ', '
+
+            IC_kernel_output += 'float64 ' + drive_var_str + ', '
 
     kernel_output = kernel_output[0:-2]
     IC_kernel_output = IC_kernel_output[0:-2]
@@ -163,7 +221,6 @@ def generate_kernel(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
     sweep_num = 0
 
     for i in range(0, len(param_dict_keys)):
-
         try: # this is for sweep variables (specifying a range and a number of points)
 
             param0 = param_dict[param_dict_keys[i]][0]
@@ -187,25 +244,39 @@ def generate_kernel(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
             IC_kernel_body += 'double ' + param_dict_keys[i] + ' = ' + str(float(param_dict[param_dict_keys[i]])) + 'f;\n'
 
     for i in range(0, sweep_num):
-
         kernel_input += 'int32 index' + str(i + 1) + ', '
         IC_kernel_input += 'int32 index' + str(i + 1) + ', '
 
     kernel_input = kernel_input[0:-2]  # removes trailing comma
     IC_kernel_input = IC_kernel_input[0:-2]
 
-    for i in range(0, len(var_strs)):
-
+    for i in range(0, len(drive_var_strs)):
         if use_complex:
-            kernel_body += 'd' + var_strs[i] + 'dt_R = ' + exp_cs[2 * i] + '; \n'
-            kernel_body += 'd' + var_strs[i] + 'dt_I= ' + exp_cs[2 * i + 1] + '; \n'
+            kernel_body += 'double ' + drive_var_strs[i] + '_R=' + drive_eom_cs[2 * i] + '; \n'
+            kernel_body += 'double ' + drive_var_strs[i] + '_I=' + drive_eom_cs[2 * i + 1] + '; \n'
 
-            IC_kernel_body += 'IC_' + var_strs[i] + '_R = ' + IC_cs[2 * i] + '; \n'
-            IC_kernel_body += 'IC_' + var_strs[i] + '_I= ' + IC_cs[2 * i + 1] + '; \n'
+            '''
+            it may seem weird that we are defining the initial condition of the drive terms, which by definition
+            don't have an initial condition (they are defined directly by EoM). This is just a quick fix to make the 
+            IC kernel have the same number of outputs as the main kernel. It doesn't actually do anything, so we 
+            just set it to zero.
+            '''
+            IC_kernel_body += 'IC_' + drive_var_strs[i] + '_R = 0; \n'
+            IC_kernel_body += 'IC_' + drive_var_strs[i] + '_I = 0 ; \n'
+        else:
+            kernel_body += drive_var_strs[i] + ' = ' + drive_eom_cs[i] + '; \n'
+            IC_kernel_body += 'IC_' + drive_var_strs[i] + ' = 0; \n'
+
+    for i in range(0, len(var_strs)):
+        if use_complex:
+            kernel_body += 'd' + var_strs[i] + 'dt_R=' + eom_cs[2 * i] + '; \n'
+            kernel_body += 'd' + var_strs[i] + 'dt_I= ' + eom_cs[2 * i + 1] + '; \n'
+
+            IC_kernel_body += 'IC_' + var_strs[i] + '_R =' + IC_cs[2 * i] + '; \n'
+            IC_kernel_body += 'IC_' + var_strs[i] + '_I=' + IC_cs[2 * i + 1] + '; \n'
 
         else:
-            kernel_body += 'd' + var_strs[i] + 'dt = ' + exp_cs[i] + '; \n'
-
+            kernel_body += 'd' + var_strs[i] + 'dt = ' + eom_cs[i] + '; \n'
             IC_kernel_body += 'IC_' + var_strs[i] + ' = ' + IC_cs[i] + '; \n'
 
     kernel = cp.ElementwiseKernel(kernel_input, kernel_output, kernel_body, 'demo_ODE')
@@ -224,15 +295,17 @@ def generate_kernel(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
 
     return kernel_string, IC_kernel_string, kernel, IC_kernel, shape
 
-def generate_pycode(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, print_result=False):
+def generate_pycode(var_strs, eom_strs, drive_var_strs, drive_eom_strs, IC_strs, param_dict, use_complex=False, print_result=False):
     '''
     ~~Similar to above but for generating python code to run simulations, encoded in the same format, on CPU~~
     Sympy's printer is not actually that useful here, so this rewrites M complex-valued EOMs as 2M real-valued EOMs, then
     makes a "kernel" - a string that defines a derivative function, which can be called as an exec() statement in the RK loop
     '''
 
-    exp_sps = [] # sympy translation
-    exp_nps = [] # numpy translation
+    eom_sps = []  # sympy translation
+    eom_nps = []  # numpy translation
+    drive_eom_sps = []  # sympy translation
+    drive_eom_nps = []  # numpy translation
     IC_sps = []
     IC_nps = []
 
@@ -249,11 +322,16 @@ def generate_pycode(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
         else:
             numpy_kernel += var_str + ', '
 
+    for drive_var_str in drive_var_strs:
+        if use_complex:
+            numpy_kernel += drive_var_str + '_R, '
+            numpy_kernel += drive_var_str + '_I, '
+        else:
+            numpy_kernel += drive_var_str + ', '
+
     numpy_kernel = numpy_kernel[:-2]
 
     numpy_kernel += '): \n'
-
-    symbols = sp.symbols(var_strs)
 
     symbols_and_parameters_dict = {}
 
@@ -270,29 +348,39 @@ def generate_pycode(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
 
     for i in range(0, len(var_strs)):
         symbol = sp.Symbol(var_strs[i], real=True)
-        symbols_and_parameters_dict[var_strs[i]] = symbols[i]
+        symbols_and_parameters_dict[var_strs[i]] = symbol
 
-    for j in range(0,len(exp_strs)):
+    for i in range(0, len(drive_var_strs)):
+        symbol = sp.Symbol(drive_var_strs[i], real=True)
+        symbols_and_parameters_dict[drive_var_strs[i]] = symbol
 
-        exp_str = exp_strs[j]
+    for j in range(0, len(drive_eom_strs)):
+
+        eom_str = eom_strs[j]
         IC_str = IC_strs[j]
 
         if use_complex:
 
-            exp_sp = sp.sympify(exp_str, locals=symbols_and_parameters_dict)
+            eom_sp = sp.sympify(eom_str, locals=symbols_and_parameters_dict)
             IC_sp = sp.sympify(IC_str, locals=symbols_and_parameters_dict)
 
             for i in range(0, len(var_strs)):
                 symbol_R = sp.Symbol(var_strs[i] + '_R', real=True)
                 symbol_I = sp.Symbol(var_strs[i] + '_I', real=True)
 
-                exp_sp = exp_sp.subs(symbols[i], symbol_R + 1j * symbol_I)
+                eom_sp = eom_sp.subs(symbols_and_parameters_dict[var_strs[i]], symbol_R + 1j * symbol_I)
+
+            for i in range(0, len(drive_var_strs)):
+                symbol_R = sp.Symbol(drive_var_strs[i] + '_R', real=True)
+                symbol_I = sp.Symbol(drive_var_strs[i] + '_I', real=True)
+
+                eom_sp = eom_sp.subs(symbols_and_parameters_dict[drive_var_strs[i]], symbol_R + 1j * symbol_I)
 
             # First, convert expressions for EoMs and initial conditions into sympy format
-            exp_sp_R = sp.re(exp_sp)
-            exp_sp_I = sp.im(exp_sp)
-            exp_sps.append(exp_sp_R)
-            exp_sps.append(exp_sp_I)
+            eom_sp_R = sp.re(eom_sp)
+            eom_sp_I = sp.im(eom_sp)
+            eom_sps.append(eom_sp_R)
+            eom_sps.append(eom_sp_I)
 
             IC_sp_R = sp.re(IC_sp)
             IC_sp_I = sp.im(IC_sp)
@@ -300,26 +388,92 @@ def generate_pycode(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
             IC_sps.append(IC_sp_I)
 
             # Then, convert into numpy format with pycode(). This catches the most functions
-            exp_np_R = pycode(exp_sp_R, fully_qualified_modules=False)
-            exp_np_I = pycode(exp_sp_I, fully_qualified_modules=False)
-            exp_nps.append(exp_np_R)
-            exp_nps.append(exp_np_I)
+            eom_np_R = pycode(eom_sp_R, fully_qualified_modules=False)
+            eom_np_I = pycode(eom_sp_I, fully_qualified_modules=False)
+            eom_nps.append(eom_np_R)
+            eom_nps.append(eom_np_I)
 
             IC_np_R = pycode(IC_sp_R, fully_qualified_modules=False)
             IC_np_I = pycode(IC_sp_I, fully_qualified_modules=False)
             IC_nps.append(IC_np_R)
             IC_nps.append(IC_np_I)
 
-            numpy_kernel += '    d' + var_strs[j] + '_Rdt = ' + exp_np_R + ' \n'
-            numpy_kernel += '    d' + var_strs[j] + '_Idt = ' + exp_np_I + ' \n'
+            numpy_kernel += '    d' + var_strs[j] + '_Rdt = ' + eom_np_R + ' \n'
+            numpy_kernel += '    d' + var_strs[j] + '_Idt = ' + eom_np_I + ' \n'
 
             numpy_IC_kernel += '    IC_' + var_strs[j] + '_R = ' + IC_np_R + ' \n'
             numpy_IC_kernel += '    IC_' + var_strs[j] + '_I = ' + IC_np_I + ' \n'
 
         else:
             # First, convert expressions for EoMs and initial conditions into sympy format
-            exp_sp = sp.sympify(exp_str)
-            exp_sps.append(exp_sp)
+            eom_sp = sp.sympify(eom_str)
+            eom_sps.append(eom_sp)
+
+            IC_sp = sp.sympify(IC_str)
+            IC_sps.append(IC_sp)
+
+            # Then, convert into numpy format with pycode(). This catches the most functions
+            IC_np = pycode(IC_sp, fully_qualified_modules=False)
+            IC_nps.append(IC_np)
+
+            numpy_kernel += '    d' + var_strs[j] + 'dt = ' + exp_np + ' \n'
+
+            numpy_IC_kernel += '    IC_' + var_strs[j] + ' = ' + IC_np + ' \n'
+
+    for j in range(0, len(eom_strs)):
+
+        eom_str = eom_strs[j]
+        IC_str = IC_strs[j]
+
+        if use_complex:
+
+            eom_sp = sp.sympify(eom_str, locals=symbols_and_parameters_dict)
+            IC_sp = sp.sympify(IC_str, locals=symbols_and_parameters_dict)
+
+            for i in range(0, len(var_strs)):
+                symbol_R = sp.Symbol(var_strs[i] + '_R', real=True)
+                symbol_I = sp.Symbol(var_strs[i] + '_I', real=True)
+
+                eom_sp = eom_sp.subs(symbols_and_parameters_dict[var_strs[i]], symbol_R + 1j * symbol_I)
+
+            for i in range(0, len(drive_var_strs)):
+                symbol_R = sp.Symbol(drive_var_strs[i] + '_R', real=True)
+                symbol_I = sp.Symbol(drive_var_strs[i] + '_I', real=True)
+
+                eom_sp = eom_sp.subs(symbols_and_parameters_dict[drive_var_strs[i]], symbol_R + 1j * symbol_I)
+
+            # First, convert expressions for EoMs and initial conditions into sympy format
+            eom_sp_R = sp.re(eom_sp)
+            eom_sp_I = sp.im(eom_sp)
+            eom_sps.append(eom_sp_R)
+            eom_sps.append(eom_sp_I)
+
+            IC_sp_R = sp.re(IC_sp)
+            IC_sp_I = sp.im(IC_sp)
+            IC_sps.append(IC_sp_R)
+            IC_sps.append(IC_sp_I)
+
+            # Then, convert into numpy format with pycode(). This catches the most functions
+            eom_np_R = pycode(eom_sp_R, fully_qualified_modules=False)
+            eom_np_I = pycode(eom_sp_I, fully_qualified_modules=False)
+            eom_nps.append(eom_np_R)
+            eom_nps.append(eom_np_I)
+
+            IC_np_R = pycode(IC_sp_R, fully_qualified_modules=False)
+            IC_np_I = pycode(IC_sp_I, fully_qualified_modules=False)
+            IC_nps.append(IC_np_R)
+            IC_nps.append(IC_np_I)
+
+            numpy_kernel += '    d' + var_strs[j] + '_Rdt = ' + eom_np_R + ' \n'
+            numpy_kernel += '    d' + var_strs[j] + '_Idt = ' + eom_np_I + ' \n'
+
+            numpy_IC_kernel += '    IC_' + var_strs[j] + '_R = ' + IC_np_R + ' \n'
+            numpy_IC_kernel += '    IC_' + var_strs[j] + '_I = ' + IC_np_I + ' \n'
+
+        else:
+            # First, convert expressions for EoMs and initial conditions into sympy format
+            eom_sp = sp.sympify(eom_str)
+            eom_sps.append(eom_sp)
 
             IC_sp = sp.sympify(IC_str)
             IC_sps.append(IC_sp)
@@ -362,4 +516,4 @@ def generate_pycode(var_strs, exp_strs, IC_strs, param_dict, use_complex=False, 
         print('NUMPY IC KERNEL:')
         print(numpy_IC_kernel)
 
-    return exp_nps, numpy_kernel, numpy_IC_kernel
+    return eom_nps, numpy_kernel, numpy_IC_kernel
