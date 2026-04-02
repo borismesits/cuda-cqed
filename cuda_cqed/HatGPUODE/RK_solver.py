@@ -37,7 +37,8 @@ def RK_loop(x, dt, kernel_op, idxs, S, num_drive_terms):
         k4 = f_dxdt(x + k3 * dt, ti + dt, dt, kernel_op, idxs)
 
         x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
-        x[-num_drive_terms:, :] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:, :]
+        if num_drive_terms > 0:
+            x[-num_drive_terms:, :] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:, :]
 
         x_d[:,:,i] = x
 

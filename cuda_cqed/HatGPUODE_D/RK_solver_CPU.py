@@ -26,7 +26,8 @@ def RK_loop_CPU(M, tlist, numpy_kernel, numpy_IC_kernel, num_drive_terms):
         k4 = np.array(numpy_kernel(tlist[i] + dt, * (x[:, i] + k3 * dt)))
 
         x[:,i+1] = x[:,i] + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
-        x[-num_drive_terms:, i+1] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:]
+        if num_drive_terms > 0:
+            x[-num_drive_terms:, i+1] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:]
 
     print('...finished CPU quick solve!')
 

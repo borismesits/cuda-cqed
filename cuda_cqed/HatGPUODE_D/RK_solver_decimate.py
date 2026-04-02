@@ -106,7 +106,8 @@ def RK_loop_decimate_onlyfinal(x, dt, kernel_op, idxs, d_factor, d_omega, S, num
         k4 = f_dxdt(x + k3 * dt, ti + dt, dt, kernel_op, idxs)
 
         x += (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
-        x[-num_drive_terms:, :] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:, :]
+        if num_drive_terms > 0:
+            x[-num_drive_terms:, :] = (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)[-num_drive_terms:, :]
 
         integrated_I += x * cp.cos(d_omega * ti) / d_factor
         integrated_Q += x * cp.sin(d_omega * ti) / d_factor
