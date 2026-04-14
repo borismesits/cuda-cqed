@@ -97,16 +97,12 @@ def plot_Qfunc(a, aa, na, ax=None, line=None):
 
     phi = np.linspace(0, 2 * np.pi, 101)
 
-    order = np.argsort(np.linalg.eig(covar)[0])
-    major_idx = order[1]
-    minor_idx = order[0]
+    theta = np.angle(np.linalg.eig(covar)[1][0][0] + 1j * np.linalg.eig(covar)[1][0][1])
+    Sx = np.linalg.eig(covar)[0][0]
+    Sy = np.linalg.eig(covar)[0][1]
 
-    theta = -np.angle(np.linalg.eig(covar)[1][:, 1][minor_idx] + 1j * np.linalg.eig(covar)[1][:, 1][major_idx])
-    Smajor = np.sort(np.linalg.eig(covar)[0])[major_idx]
-    Sminor = np.sort(np.linalg.eig(covar)[0])[minor_idx]
-
-    x1 = (Smajor) ** (1 / 4) * np.cos(phi) * 2
-    y1 = (Sminor) ** (1 / 4) * np.sin(phi) * 2
+    x1 = (Sx) ** (1 / 4) * np.cos(phi) * 2
+    y1 = (Sy) ** (1 / 4) * np.sin(phi) * 2
 
     x2 = x1 * np.cos(theta) + y1 * np.sin(theta) + np.real(a)
     y2 = -x1 * np.sin(theta) + y1 * np.cos(theta) + np.imag(a)
