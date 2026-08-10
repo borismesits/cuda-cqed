@@ -38,9 +38,9 @@ class Sim():
 
     def make_pulse(self, omega, A, phi, start, stop, ramp):
 
-        return '-1j*' + str(A) + '/2*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-' + str(start) + ')/' + str(
-            ramp) + ')-tanh((t-' + str(stop) + ')/' + str(ramp) + ')) + ' + str(A) + '/(2*' + str(ramp) + ')*exp(-1j*(' + str(omega) + \
-            '*t +' + str(phi) + '))*(sech((t-' + str(start) + ')/' + str(ramp) + ')**2-sech((t-' + str(stop) + ')/' + str(ramp) + ')**2)'
+        return '-1j*' + str(A) + '/2*' + str(omega) + '*exp(-1j*(' + str(omega) + '*t +' + str(phi) + '))*(tanh((t-(' + str(start) + '))/' + str(
+            ramp) + ')-tanh((t-(' + str(stop) + '))/' + str(ramp) + ')) + ' + str(A) + '/(2*' + str(ramp) + ')*exp(-1j*(' + str(omega) + \
+            '*t +' + str(phi) + '))*(sech((t-(' + str(start) + '))/' + str(ramp) + ')**2-sech((t-(' + str(stop) + '))/' + str(ramp) + ')**2)'
 
     def make_pulse_sequence(self, pulses):
 

@@ -16,12 +16,16 @@ import warnings
 import matplotlib as mpl
 mpl.use('Qt5Agg')
 
+COLORS = [(1,0,0),(0,0,1),(0.2,1,0.2), (0.5,0.5,0.2)]
 
-def cumulant_slider_plot(a, aa, na,
+def cumulant_slider_plot(t, mode_names, a_list, aa_list, na_list,
                  axes_dict: dict, plot_range=5, callback: Callable = None, adaptiveRange=False,
                  **hist2dArgs) -> List[Slider]:
     """Create a slider plot widget. The caller needs to maintain a reference to
     the returned Slider objects to keep the widget activate
+
+    This is designed for plotting the Q fucntion of states represented by second order cumulant expansion
+    thus you need to provide the operators a, aa, and adaga or na
 
     :param data_I:
     :param data_Q:
@@ -35,23 +39,57 @@ def cumulant_slider_plot(a, aa, na,
         pass
 
     # initial figure
-    nAxes = len(axes_dict)
+    num_axes = len(axes_dict)
 
-    fig = plt.figure(figsize=(7, 7 + nAxes * 0.3))
+    try:
+        num_modes = len(a_list)
+        num_states = len(a_list[0])
+    except:
+        num_modes = 1
+        a_list = [[a_list]]
+        aa_list = [[aa_list]]
+        na_list = [[na_list]]
+
+    fig, axs = plt.subplots(nrows=2, ncols=num_modes, figsize=(9,9 + num_axes * 0.3))
     callback_text = plt.figtext(0.15, 0.01, "", size="large", figure=fig)
-    plt.subplots_adjust(bottom=nAxes * 0.3 / (7 + nAxes * 0.3) + 0.1)
-    plt.subplot(1, 1, 1)
-    main_ax = plt.gca()
-    main_ax.set_xlim([-plot_range,plot_range])
-    main_ax.set_ylim([-plot_range, plot_range])
-    main_ax.grid()
+    plt.subplots_adjust(bottom=num_axes * 0.3 / (9 + num_axes * 0.3) + 0.1)
 
-    line = plot_Qfunc(a[0,0], aa[0,0], na[0,0], ax=None, line=None)
+    for i in range(0, num_modes):
+        axs[0, i].set_xlim([-plot_range, plot_range])
+        axs[0, i].set_ylim([-plot_range, plot_range])
+        axs[0, i].grid()
+        axs[0, i].set_title(str(mode_names[i]))
+        axs[1, i].grid()
+        axs[0, i].set_aspect(1)
+        axs[0, i].set_yticks(axs[0, i].get_xticks())
+
+        axs[1, i].set_xlabel('Time (ns)')
+        axs[1, i].set_ylabel('Mean amplitude')
+
+
+    blob_lines = [[0]*num_states for i in range(num_modes)]
+    abs_lines = [[0]*num_states for i in range(num_modes)]
+    real_lines = [[0] * num_states for i in range(num_modes)]
+    imag_lines = [[0] * num_states for i in range(num_modes)]
+    rms_lines = [[0] * num_states for i in range(num_modes)]
+    time_scatter = [[0]*num_states for i in range(num_modes)]
+
+    for i in range(0, num_modes):
+        ax_ylim = np.max(np.abs(a_list[i]))*1.1
+        axs[1, i].set_ylim([-ax_ylim, ax_ylim])
+        for j in range(0, num_states):
+            blob_lines[i][j] = plot_Qfunc_outline(a_list[i][j].flatten()[0], aa_list[i][j].flatten()[0], na_list[i][j].flatten()[0], ax=axs[0, i], color=COLORS[j], polygon=None)
+
+            # abs_lines[i][j] = axs[1, i].plot(t, np.abs(a_list[i][j].flatten()[0:len(t)]), c=COLORS[j], alpha=0.5)
+            real_lines[i][j] = axs[1, i].plot(t*1e9, np.real(a_list[i][j].flatten()[0:len(t)]), c=COLORS[j], alpha=0.5)
+            imag_lines[i][j] = axs[1, i].plot(t*1e9, np.imag(a_list[i][j].flatten()[0:len(t)]), dashes=[2, 2, 10, 2], c=COLORS[j], alpha=0.5)
+            # rms_lines[i][j] = axs[1, i].plot(t, np.sqrt(na_list[i][j].flatten()[0:len(t)]), linewidth=1, c=COLORS[j], alpha=0.5)
+            time_scatter[i][j] = axs[1, i].plot([0], [0], 'ko')
 
     axcolor = 'lightgoldenrodyellow'
     sld_list = []
     for idx, (k, v) in enumerate(axes_dict.items()):
-        ax_ = plt.axes([0.2, (nAxes - idx) * 0.04, 0.6, 0.03], facecolor=axcolor)
+        ax_ = plt.axes([0.2, (num_axes - idx) * 0.04, 0.6, 0.03], facecolor=axcolor)
         sld_ = Slider(ax_, k, 0, len(v) - 1, valinit=0, valstep=1)
         sld_list.append(sld_)
 
@@ -60,7 +98,7 @@ def cumulant_slider_plot(a, aa, na,
         sel_dim = []
         ax_val_list = []
         ax_idx_list = []
-        for i in range(nAxes):
+        for i in range(num_axes):
             ax_name = sld_list[i].label.get_text()
             ax_idx = int(sld_list[i].val)
             sel_dim.append(int(ax_idx))
@@ -69,22 +107,33 @@ def cumulant_slider_plot(a, aa, na,
             ax_idx_list.append(ax_idx)
             sld_list[i].valtext.set_text(str(ax_val))
         ax_idx_tuple = tuple(ax_idx_list)
-        new_a = a[ax_idx_tuple]
-        new_aa = aa[ax_idx_tuple]
-        new_na = na[ax_idx_tuple]
 
-        line = plot_Qfunc(new_a, new_aa, new_na, ax=main_ax, line=main_ax.lines[0])
-        # print callback result on top of figure
-        if callback is not None:
-            result = callback(new_a, new_aa, new_na, *ax_val_list)
-            callback_text.set_text(callback.__name__ + f": {result}")
-        fig.canvas.draw_idle()
+        for i in range(0, num_modes):
+            for j in range(0, num_states):
+                new_a = a_list[i][j][ax_idx_tuple]
+                new_aa = aa_list[i][j][ax_idx_tuple]
+                new_na = na_list[i][j][ax_idx_tuple]
 
-    for i in range(nAxes):
+                line = plot_Qfunc_outline(new_a, new_aa, new_na, ax=axs[0, i], polygon=blob_lines[i][j])
+                # abs_lines[i][j][0].set_ydata(np.abs(a_list[i][j][ax_idx_tuple[0:-1]]))
+                real_lines[i][j][0].set_ydata(np.real(a_list[i][j][ax_idx_tuple[0:-1]]))
+                imag_lines[i][j][0].set_ydata(np.imag(a_list[i][j][ax_idx_tuple[0:-1]]))
+                # rms_lines[i][j][0].set_ydata(np.sqrt(na_list[i][j][ax_idx_tuple[0:-1]]))
+
+                time_scatter[i][j][0].set_xdata([t[ax_idx_tuple[-1]]*1e9])
+                # time_scatter[i][j][0].set_ydata([np.abs(a_list[i][j][ax_idx_tuple])])
+
+            # print callback result on top of figure
+                if callback is not None:
+                    result = callback(new_a, new_aa, new_na, *ax_val_list)
+                    callback_text.set_text(callback.__name__ + f": {result}")
+                fig.canvas.draw_idle()
+
+    for i in range(num_axes):
         sld_list[i].on_changed(update)
     return sld_list
 
-def plot_Qfunc(a, aa, na, ax=None, line=None):
+def plot_Qfunc_outline(a, aa, na, ax=None, color=(1,0,0), polygon=None):
     if ax == None:
         ax = plt.gca()
 
@@ -107,14 +156,17 @@ def plot_Qfunc(a, aa, na, ax=None, line=None):
     x2 = x1 * np.cos(theta) + y1 * np.sin(theta) + np.real(a)
     y2 = -x1 * np.sin(theta) + y1 * np.cos(theta) + np.imag(a)
 
-    if line == None:
-        line = ax.plot(x2, y2)
+    if polygon == None:
+        # line = ax.plot(x2, y2)[0]
+        polygon = ax.fill(x2, y2, color=color, alpha=0.5)[0]
     else:
-        line.set_xdata(x2)
-        line.set_ydata(y2)
+        polygon.set_xy(np.array([x2, y2]).transpose())
+        # line.set_xdata(x2)
+        # line.set_ydata(y2)
         plt.draw()
 
-    return line
+    # return line
+    return polygon
     # ax.xlim([-7,7])
     # ax.ylim([-7,7])
     # plt.gca().set_aspect('equal')
@@ -176,47 +228,160 @@ if __name__ == '__main__':
     # matplotlib.use('Qt5Agg')
 
     pi = np.pi
-    K = 0.0001
-    g3 = 4e-3
-    s1 = 1
-    g2 = g3 * s1
-
-    disp = 1
 
     sim = Sim(use_complex=True)
 
-    sim.add_param('wb', 0.001 * 2 * pi, is_excitation=True)
-    # sim.add_param('sqrtkb', np.sqrt(1e7 * 2 * np.pi)) # in MHz
-    sim.add_param('g3', g3)
-    sim.add_paramsweep('amplG', 0, 2, 101)  # 18 - gain
-    sim.add_param('IC', disp)
-    sim.add_param('K', K)
+    pulse_length = 50e-9
+    ramp = pulse_length * 0.5
+    gap = ramp * 5
 
-    sim.add_EOM('s1', '0', IC_str='amplG')
+    sim.add_param('hi', 0, is_excitation=True)
+    sim.add_paramsweep('sigma_z', -1, 1, 2)
+    sim.add_paramsweep('chi', 0e6 * 2 * pi, 2e6 * 2 * pi, 5)
+    sim.add_param('g_3', 5e6 * 2 * np.pi)
+    sim.add_param('K4', 0)
+    sim.add_param('K6', 0.0e6 * 2 * np.pi)
+    sim.add_param('lambda_ab', 0.1)
+    sim.add_param('lambda_bc', 0.1)
+    sim.add_param('ka', 0.0e6 * 2 * np.pi)
+    sim.add_param('gamma_phi_b', 0.0e6 * 2 * np.pi)
+    sim.add_paramsweep('kb', 0.0e6 * 2 * np.pi, 10e6 * 2 * np.pi, 10)
+    sim.add_param('kc', 5e6 * 2 * np.pi)
+    sim.add_param('A', 0)
 
-    # sim.add_EOM('b', '-1j*wb*b - (sqrtkb**2/2)*b + 1j*g3*conjugate(b)*s1 - 1j*b*K*abs(b)**2',IC_str='IC')
-    sim.add_EOM('b', '-1j*wb*b -2j*K*nb*b - 2j*g3*conjugate(b)*s1', IC_str='IC')
-    sim.add_EOM('bb', '-2j*wb*bb -2j*K*bb - 4j*K*nb*bb -2j*g3*s1 - 4j*g3*s1*nb', IC_str='IC**2')
-    sim.add_EOM('nb', '2j*g3*bb*s1 - 2j*g3*conjugate(bb)*s1', IC_str='IC**2')
+    sim.add_param('length', pulse_length)
+    sim.add_param('ramp', ramp)
+
+    sim.add_param('wCONV1', 0)
+    sim.add_param('amplCONV1', 1.7)
+    sim.add_param('phaseCONV1', np.pi / 2)
+
+    sim.add_param('wSQZ', 0.2)
+    sim.add_param('amplSQZ', 0.2*0)
+    sim.add_param('phaseSQZ', np.pi / 2)
+
+    sim.add_param('wCONV2', 0)
+    sim.add_param('amplCONV2', 2.2*0)
+    sim.add_param('phaseCONV2', -np.pi / 2)
+
+    sim.add_param('init_a', 3)
+    sim.add_param('init_b', 0)
+    sim.add_param('init_c', 0)
+
+    sim.add_paramsweep('delay', 100e-9, 300e-9, 5)
+
+    pulse_sequence_1 = '0'
+    pulse_sequence_2 = '0'
+    pulse_sequence_3 = '0'
+
+    tpulse = 0
+
+    pulse = sim.make_pulse('wCONV1', 'amplCONV1', 'phaseCONV1', str(tpulse)+'+delay', str(tpulse + pulse_length)+'+delay', str(ramp))
+    pulse_sequence_1 = sim.make_pulse_sequence([pulse_sequence_1, pulse])
+    tpulse += pulse_length + gap
+
+    pulse = sim.make_pulse('wSQZ', 'amplSQZ', 'phaseSQZ', str(tpulse)+'+delay', str(tpulse+pulse_length)+'+delay', str(ramp))
+    pulse_sequence_2 = sim.make_pulse_sequence([pulse_sequence_2, pulse])
+    tpulse += pulse_length+gap
+
+    pulse = sim.make_pulse('wCONV2', 'amplCONV2', 'phaseCONV2', str(tpulse)+'+delay', str(tpulse+pulse_length)+'+delay', str(ramp))
+    pulse_sequence_3 = sim.make_pulse_sequence([pulse_sequence_3, pulse])
+    tpulse += pulse_length+gap
+
+    sim.add_EOM('eta_1', pulse_sequence_1)
+    sim.add_EOM('eta_2', pulse_sequence_2)
+    sim.add_EOM('eta_3', pulse_sequence_3)
+
+    sim.add_EOM('a', ' (-1.0*1j*chi*sigma_z)*a +(-6.0*1j*conjugate(eta_1)*g_3*lambda_ab)*b  -ka*a/2', IC_str='init_a')
+    sim.add_EOM('aa', ' (-2.0*1j*chi*sigma_z)*aa +(-12.0*1j*conjugate(eta_1)*g_3*lambda_ab)*ab  -ka*aa', IC_str='init_a**2')
+    sim.add_EOM('adaga',
+                ' (6.0*1j*eta_1*g_3*lambda_ab)*conjugate(adagb) +(-6.0*1j*conjugate(eta_1)*g_3*lambda_ab)*adagb  -ka*adaga',
+                IC_str='init_a**2')
+    sim.add_EOM('b',
+                ' (-6.0*1j*eta_1*g_3*lambda_ab)*a +(1.0*1j*(-2.0*K4*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2) - 1.0*K6*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2)**2))*b +(-6.0*1j*eta_2*g_3)*conjugate(b) +(-2.0*1j*K4 )*bdagb*b +(-6.0*1j*conjugate(eta_3)*g_3*lambda_bc)*c  -kb*b/2-gamma_phi_b*b',
+                IC_str='init_b')
+    sim.add_EOM('bb',
+                ' (-6.0*1j*eta_2*g_3)+(-12.0*1j*eta_1*g_3*lambda_ab)*ab +(-2.0*1j*K4 + 2.0*1j*(-2.0*K4*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2) - 1.0*K6*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2)**2))*bb +(-12.0*1j*conjugate(eta_3)*g_3*lambda_bc)*bc +(-12.0*1j*eta_2*g_3)*bdagb +(-4.0*1j*K4 )*bdagb*bb  -kb*bb-2*gamma_phi_b*bb',
+                IC_str='init_b**2')
+    sim.add_EOM('bdagb',
+                ' (-6.0*1j*eta_1*g_3*lambda_ab)*conjugate(adagb) +(6.0*1j*conjugate(eta_1)*g_3*lambda_ab)*adagb +(6.0*1j*conjugate(eta_2)*g_3)*bb +(6.0*1j*eta_3*g_3*lambda_bc)*conjugate(bdagc) +(-6.0*1j*eta_2*g_3)*conjugate(bb) +(-6.0*1j*conjugate(eta_3)*g_3*lambda_bc)*bdagc  -kb*bdagb',
+                IC_str='init_b**2')
+    sim.add_EOM('c', ' (-6.0*1j*eta_3*g_3*lambda_bc)*b  -kc*c/2', IC_str='init_c')
+    sim.add_EOM('cc', ' (-12.0*1j*eta_3*g_3*lambda_bc)*bc  -kc*cc', IC_str='init_c**2')
+    sim.add_EOM('cdagc',
+                ' (-6.0*1j*eta_3*g_3*lambda_bc)*conjugate(bdagc) +(6.0*1j*conjugate(eta_3)*g_3*lambda_bc)*bdagc  -kc*cdagc',
+                IC_str='init_c**2')
+    sim.add_EOM('ab',
+                ' (-6.0*1j*eta_1*g_3*lambda_ab)*aa +(-1.0*1j*chi*sigma_z + 1.0*1j*(-2.0*K4*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2) - 1.0*K6*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2)**2))*ab +(-6.0*1j*eta_2*g_3)*conjugate(adagb) +(-2.0*1j*K4 )*conjugate(adagb)*bb +(-6.0*1j*conjugate(eta_3)*g_3*lambda_bc)*ac +(-6.0*1j*conjugate(eta_1)*g_3*lambda_ab)*bb  -(ka+kb)*ab/2')
+    sim.add_EOM('adagb',
+                ' (-6.0*1j*eta_1*g_3*lambda_ab)*adaga +(1.0*1j*chi*sigma_z + 1.0*1j*(-2.0*K4*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2) - 1.0*K6*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2)**2))*adagb +(-6.0*1j*eta_2*g_3)*conjugate(ab) +(-2.0*1j*K4 )*conjugate(ab)*bb +(-6.0*1j*conjugate(eta_3)*g_3*lambda_bc)*adagc +(6.0*1j*eta_1*g_3*lambda_ab)*bdagb  -(ka+kb)*adagb/2')
+    sim.add_EOM('bc',
+                ' (-6.0*1j*eta_1*g_3*lambda_ab)*ac +(-6.0*1j*eta_3*g_3*lambda_bc)*bb +(1.0*1j*(-2.0*K4*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2) - 1.0*K6*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2)**2))*bc +(-2.0*1j*K4 )*conjugate(bdagb)*bc +(-6.0*1j*eta_2*g_3)*bdagc +(-6.0*1j*conjugate(eta_3)*g_3*lambda_bc)*cc  -(kb+kc)*bc/2')
+    sim.add_EOM('bdagc',
+                ' (6.0*1j*conjugate(eta_1)*g_3*lambda_ab)*adagc +(6.0*1j*conjugate(eta_2)*g_3)*bc +(-6.0*1j*eta_3*g_3*lambda_bc)*bdagb +(2.0*1j*K4 + 1.0*1j*(-2.0*K4*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2) - 1.0*K6*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2)**2) + 1.0*1j*(2.0*K4*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2) + 1.0*K6*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2)**2) )*conjugate(bb)*bc +(1.0*1j*(2.0*K4*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2) + 1.0*K6*(abs(eta_1)**2+abs(eta_2)**2+abs(eta_3)**2)**2))*bdagc +(6.0*1j*eta_3*g_3*lambda_bc)*cdagc  -(kb+kc)*bdagc/2')
+    sim.add_EOM('ac',
+                ' (-6.0*1j*eta_3*g_3*lambda_bc)*ab +(-1.0*1j*chi*sigma_z)*ac +(-6.0*1j*conjugate(eta_1)*g_3*lambda_ab)*bc  -(ka+kc)*ac/2')
+    sim.add_EOM('adagc',
+                ' (-6.0*1j*eta_3*g_3*lambda_bc)*adagb +(1.0*1j*chi*sigma_z)*adagc +(6.0*1j*eta_1*g_3*lambda_ab)*bdagc  -(ka+kc)*adagc/2')
 
     sim.set_solve_type('all')
 
-    sim.specify_time(t_f=10000, pts=10001)
+    sim.specify_time(t_f=1e-6, pts=1001)
 
     sim.validate()
 
     x, t = sim.solve()
 
-    xd = x.copy()
-    td = t.copy()
+    a = x[6, :] + 1j * x[7, :]
+    aa = x[8, :] + 1j * x[9, :]
+    na = x[10, :]
 
-    b = x[2, :] + 1j * x[3, :]
-    bb = x[4, :] + 1j * x[5, :]
-    nb = x[6, :] + 1j * x[7, :]
+    b = x[12, :] + 1j * x[13, :]
+    bb = x[14, :] + 1j * x[15, :]
+    nb = x[16, :]
 
-    axes_dict = {'amplG': sim.paramsweep_dict['amplG'], 'time (ns)': t[0,:]*1e9}
+    c = x[18, :] + 1j * x[19, :]
+    cc = x[20, :] + 1j * x[21, :]
+    nc = x[22, :]
+
+    a0 = a[0, :, :, :, :]
+    a1 = a[1, :, :, :, :]
+    # a2 = a[2, :, :, :]
+    aa0 = aa[0, :, :, :, :]
+    aa1 = aa[1, :, :, :, :]
+    # aa2 = aa[2, :, :, :]
+    na0 = na[0, :, :, :, :]
+    na1 = na[1, :, :, :, :]
+    # na2 = na[2, :, :, :]
+
+    b0 = b[0, :, :, :, :]
+    b1 = b[1, :, :, :, :]
+    # b2 = b[2, :, :, :]
+    bb0 = bb[0, :, :, :, :]
+    bb1 = bb[1, :, :, :, :]
+    # bb2 = bb[2, :, :, :]
+    nb0 = nb[0, :, :, :, :]
+    nb1 = nb[1, :, :, :, :]
+    # nb2 = nb[2, :, :, :]
+
+    c0 = c[0, :, :, :, :]
+    c1 = c[1, :, :, :, :]
+    # c2 = c[2, :, :, :]
+    cc0 = cc[0, :, :, :, :]
+    cc1 = cc[1, :, :, :, :]
+    # cc2 = cc[2, :, :, :]
+    nc0 = nc[0, :, :, :, :]
+    nc1 = nc[1, :, :, :, :]
+    # nc2 = nc[2, :, :, :]
+
+    axes_dict = {'chi (kHz)': sim.paramsweep_dict['chi']/(2e3*np.pi), 'kb (MHz)': sim.paramsweep_dict['kb']/(2e6*np.pi), 'delay (ns)': sim.paramsweep_dict['delay']*(1e9),
+                 'time (ns)': np.unique(t) * 1e9}
 
     plt.close('all')
-    cumulant_slider_plot(b, bb, nb, axes_dict, plot_range=20)
-    
+    # cumulant_slider_plot([[a0, b0, c0],[a1, b1, c1]], [[aa0, bb0, cc0],[aa1, bb1, cc1]], [[na0, nb0, nc0],[na1, nb1, nc1]], axes_dict, plot_range=20)
+    cumulant_slider_plot(np.unique(t), ['Readout','Amplifier','Output'], [[a0, a1], [b0, b1], [c0, c1]], [[aa0, aa1], [bb0, bb1], [cc0, cc1]],
+                         [[na0, na1], [nb0, nb1], [nc0, nc1]], axes_dict, plot_range=20)
 
+    # cumulant_slider_plot(np.unique(t), ['Readout','Amplifier','Output'], [[a0, a1, a2], [b0, b1, b2], [c0, c1, c2]],
+    #                      [[aa0, aa1, aa2], [bb0, bb1, bb2], [cc0, cc1, cc2]],
+    #                      [[na0, na1, na2], [nb0, nb1, nb2], [nc0, nc1, nc2]], axes_dict, plot_range=20)
